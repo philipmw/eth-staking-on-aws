@@ -1,5 +1,5 @@
 {
-  "app": "npx ts-node --prefer-ts-exts bin/pmw-eth-staking.ts",
+  "app": "npx ts-node --prefer-ts-exts bin/eth-staking-on-aws.ts",
   "watch": {
     "include": [
       "**"

@@ -1,8 +1,8 @@
-# Welcome to your CDK TypeScript project
+# Philip's Ethereum staking on AWS #
 
-This is a blank project for CDK development with TypeScript.
+This project sets up infrastructure on AWS for experimenting with staking Ethereum.
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+The project uses CDK.
 
 ## Useful commands
 
