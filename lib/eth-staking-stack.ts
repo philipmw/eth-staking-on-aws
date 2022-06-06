@@ -1,22 +1,8 @@
 import {Size, Stack, StackProps} from 'aws-cdk-lib';
 import {Construct} from 'constructs';
-import {
-  AmazonLinuxCpuType,
-  AmazonLinuxGeneration,
-  AmazonLinuxImage,
-  CfnInstance,
-  EbsDeviceVolumeType,
-  Instance,
-  InstanceClass,
-  InstanceSize,
-  InstanceType,
-  Peer,
-  Port,
-  Protocol,
-  SecurityGroup,
-  SubnetType,
-  Volume, Vpc
-} from "aws-cdk-lib/aws-ec2";
+import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import * as ec2 from "aws-cdk-lib/aws-ec2";
+import * as iam from 'aws-cdk-lib/aws-iam';
 import {IPv6Vpc} from "./ipv6vpc";
 
 export class EthStakingStack extends Stack {
@@ -30,116 +16,165 @@ export class EthStakingStack extends Stack {
       natGateways: 0,
     });
 
+    /**
+     * Execution client stuff.
+     *
+     * I am not setting up an execution client at this time because I intend to use Chainstack instead.
+     */
     // const executionClientSecurityGroup = new SecurityGroup(this, 'ExecClientSecGroup', {
     //   vpc,
     // });
     // executionClientSecurityGroup.addIngressRule(
-    //   Peer.anyIpv4(),
-    //   Port.allIcmp(),
+    //   ec2.Peer.anyIpv4(),
+    //   ec2.Port.allIcmp(),
     //   "allow ICMP"
     // );
     // executionClientSecurityGroup.addIngressRule(
-    //   Peer.anyIpv4(),
-    //   Port.tcp(22),
+    //   ec2.Peer.anyIpv4(),
+    //   ec2.Port.tcp(22),
     //   "allow SSH"
     // );
     // executionClientSecurityGroup.addIngressRule(
-    //   Peer.anyIpv4(),
-    //   Port.tcp(30303),
+    //   ec2.Peer.anyIpv4(),
+    //   ec2.Port.tcp(30303),
     //   "erigon eth/66 peering"
     // );
     // executionClientSecurityGroup.addIngressRule(
-    //   Peer.anyIpv4(),
-    //   Port.udp(30303),
+    //   ec2.Peer.anyIpv4(),
+    //   ec2.Port.udp(30303),
     //   "erigon eth/66 peering"
     // );
     // executionClientSecurityGroup.addIngressRule(
-    //   Peer.anyIpv4(),
-    //   Port.tcp(42069),
+    //   ec2.Peer.anyIpv4(),
+    //   ec2.Port.tcp(42069),
     //   "erigon snap sync"
     // );
     // executionClientSecurityGroup.addIngressRule(
-    //   Peer.anyIpv4(),
-    //   Port.udp(42069),
+    //   ec2.Peer.anyIpv4(),
+    //   ec2.Port.udp(42069),
     //   "erigon snap sync"
     // );
 
-    const consensusClientSecurityGroup = new SecurityGroup(this, 'ExecClientSecGroup', {
+    /**
+     * Lighthouse data directory for Consensus Client
+     */
+    const consensusClientVolume = new ec2.Volume(this, 'ConsensusEbsVolume', {
+      // Ideally we we would specify `consensusClientInst.instanceAvailabilityZone`,
+      // but that leads to a circular dependency with `grantAttachVolume()`.
+      availabilityZone: vpc.availabilityZones[0],
+      encrypted: false,
+      size: Size.gibibytes(100),
+      volumeName: 'ConsensusClientData',
+      volumeType: ec2.EbsDeviceVolumeType.GP3,
+    });
+
+    /**
+     * Consensus client stuff
+     */
+    const consensusClientSecurityGroup = new ec2.SecurityGroup(this, 'ExecClientSecGroup', {
       vpc,
     });
     consensusClientSecurityGroup.addIngressRule(
-      Peer.anyIpv4(),
-      Port.allIcmp(),
+      ec2.Peer.anyIpv4(),
+      ec2.Port.allIcmp(),
       "allow ICMP4"
     );
     consensusClientSecurityGroup.addIngressRule(
-      Peer.anyIpv6(),
-      new Port({
-        protocol: Protocol.ICMPV6,
-        stringRepresentation: "ALL ICMPv6"
-      }),
+      ec2.Peer.anyIpv6(),
+      ec2.Port.allIcmpV6(), // requires https://github.com/aws/aws-cdk/pull/20626
       "allow ICMP6"
     );
     consensusClientSecurityGroup.addIngressRule(
-      Peer.anyIpv6(),
-      Port.tcp(22),
-      "allow SSH"
+      ec2.Peer.anyIpv6(),
+      ec2.Port.tcp(22),
+      "allow SSH over IPv6"
     );
     // https://lighthouse-book.sigmaprime.io/advanced_networking.html#nat-traversal-port-forwarding
     consensusClientSecurityGroup.addIngressRule(
-      Peer.anyIpv4(),
-      Port.tcp(9000),
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(9000),
       "lighthouse"
     );
     consensusClientSecurityGroup.addIngressRule(
-      Peer.anyIpv6(),
-      Port.tcp(9000),
+      ec2.Peer.anyIpv6(),
+      ec2.Port.tcp(9000),
       "lighthouse"
     );
     consensusClientSecurityGroup.addIngressRule(
-      Peer.anyIpv4(),
-      Port.udp(9000),
+      ec2.Peer.anyIpv4(),
+      ec2.Port.udp(9000),
       "lighthouse"
     );
     consensusClientSecurityGroup.addIngressRule(
-      Peer.anyIpv6(),
-      Port.udp(9000),
+      ec2.Peer.anyIpv6(),
+      ec2.Port.udp(9000),
       "lighthouse"
     );
 
-    /**
-     * https://aws.amazon.com/ec2/pricing/on-demand/
-     * EC2 options for 2 GB of RAM or above:
-     * * a1.medium (1 vCPU, 2 GB RAM): $0.0255/hr
-     * * a1.large (2 vCPU, 4 GB RAM): $0.051/hr
-     * * m6g.medium (1 vCPU, 4 GB RAM): $0.0385/hr
-     */
-    const consensusClientInst = new Instance(this, "ConsensusClientInst", {
-      instanceType: InstanceType.of(InstanceClass.A1, InstanceSize.MEDIUM),
+    const consensusClientSpotOptions: ec2.LaunchTemplateSpotOptions = {
+      requestType: ec2.SpotRequestType.ONE_TIME, // needed by ASG
+    };
+    const consensusClientInstanceRole = new iam.Role(this, 'ConsensusClientInstanceRole', {
+      assumedBy: new iam.ServicePrincipal("ec2.amazonaws.com"),
+    });
+
+    consensusClientVolume.grantAttachVolume(consensusClientInstanceRole);
+
+    const consensusClientLaunchTemplate = new ec2.LaunchTemplate(this, 'ConsensusClientLaunchTemplate', {
+      ebsOptimized: true,
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.M6G, ec2.InstanceSize.LARGE),
       keyName: 'home mac',
-      machineImage: new AmazonLinuxImage({
-        cpuType: AmazonLinuxCpuType.ARM_64,
-        // As of 2022-06-02, a1 instances not compatible with Amazon Linux 2022; kernel panic at boot.
-        generation: AmazonLinuxGeneration.AMAZON_LINUX_2,
+      machineImage: new ec2.AmazonLinuxImage({
+        cpuType: ec2.AmazonLinuxCpuType.ARM_64,
+        generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2022,
       }),
-      securityGroup: consensusClientSecurityGroup,
+      role: consensusClientInstanceRole,
+      // we don't specify `securityGroup` here because we specify it in the network interface.
+      spotOptions: consensusClientSpotOptions,
+    });
+
+    // Add IPv6 to the launch template
+    // taking into account https://github.com/aws/aws-cdk/issues/11946
+    const consensusClientLaunchTemplateCfn = consensusClientLaunchTemplate.node.defaultChild as ec2.CfnLaunchTemplate;
+    consensusClientLaunchTemplateCfn.addPropertyOverride(
+      'LaunchTemplateData.NetworkInterfaces',
+      [{
+        DeviceIndex: 0, // required
+        Groups: [consensusClientSecurityGroup.securityGroupId],
+        Ipv6AddressCount: 1,
+      }]);
+
+    const consensusClientAsg = new autoscaling.AutoScalingGroup(this, 'ConsensusClientASG', {
+      launchTemplate: consensusClientLaunchTemplate,
+      minCapacity: 0,
+      maxCapacity: 1,
       vpc,
       vpcSubnets: {
-        subnetType: SubnetType.PUBLIC,
+        subnetType: ec2.SubnetType.PUBLIC,
       },
     });
-    // Add IPv6 address
-    const consensusClientInstCfn = consensusClientInst.node.defaultChild as CfnInstance;
-    consensusClientInstCfn.ipv6AddressCount = 1;
 
-    // const consensusClientVolume = new Volume(this, 'ConsensusEbsVolume', {
-    //   // https://aws.amazon.com/ebs/pricing/
-    //   availabilityZone: consensusClientInst.instanceAvailabilityZone,
-    //   encrypted: false,
-    //   size: Size.gibibytes(100),
-    //   volumeName: 'ConsensusClientData',
-    //   volumeType: EbsDeviceVolumeType.GP3,
+    /**
+     * Consensus client - on-demand instance.
+     * This is deprecated in favor of spot instance to save money.
+     */
+    // const consensusClientInst = new ec2.Instance(this, "ConsensusClientInst", {
+    //   instanceType: ec2.InstanceType.of(ec2.InstanceClass.M6G, ec2.InstanceSize.MEDIUM),
+    //   keyName: 'home mac',
+    //   machineImage: new ec2.AmazonLinuxImage({
+    //     cpuType: ec2.AmazonLinuxCpuType.ARM_64,
+    //     generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2022,
+    //   }),
+    //   securityGroup: consensusClientSecurityGroup,
+    //   vpc,
+    //   vpcSubnets: {
+    //     subnetType: ec2.SubnetType.PUBLIC,
+    //   },
     // });
-
+    // // Add IPv6 address
+    // const consensusClientInstCfn = consensusClientInst.node.defaultChild as ec2.CfnInstance;
+    // consensusClientInstCfn.ipv6AddressCount = 1;
+    //
+    // consensusClientVolume.grantAttachVolume(consensusClientInst.role);
   }
 }
