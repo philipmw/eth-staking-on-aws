@@ -84,7 +84,7 @@ On first login:
     sudo dnf install git tmux
 
 [Add 2 GB of swap](https://aws.amazon.com/premiumsupport/knowledge-center/ec2-memory-swap-file/),
-else `m7g.medium` won't have enough RAM to build Lighthouse from source:
+else the cheap instance we're using won't have enough RAM to build Lighthouse from source:
 
     sudo dd if=/dev/zero of=/swapfile bs=1MB count=2kB
 
