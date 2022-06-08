@@ -31,15 +31,46 @@ What works:
 What's yet to be done:
 
 * Validator setup documentation
-* I've yet to run a working validator on testnet, so maybe we'll discover that validating won't work with EBS
-    because it requires the low latency of local SSD.
+* My validator is still pending activation, so I've yet to run a working validator.
+  I may discover issues once validation starts, such as maybe we'll discover that EBS latency is too high
+  and we need a local SSD instead.
 * I've yet to run a consensus client on mainnet, so I don't know how much storage is required for that.
-* I've yet to run a working validator, so maybe something is missing.
 * Analysis of data transfer costs
+
+## Architecture
+
+```
+(------------------)
+( Execution client )
+(  on Chainstack   )
+(------------------)
+         ^
+|--------------------|                  \
+|  Consensus client  |                  |
+| as an EC2 instance |                  |
+|  with EBS storage  |                  |
+|--------------------|                  |
+          ^                             | my VPC on AWS
+|------------------------|              |
+|    Validator client    |              |
+|   as an EC2 instance   |              |
+| with ephemeral storage |              |
+|------------------------|              /
+
+```
 
 ## My architectural decisions
 
-**EBS rather than instance storage**:
+**Execution client on Chainstack rather than self-hosted**:
+FIXME: fill in.
+
+**Consensus client self-hosted rather than hosted by a service**:
+FIXME: fill in.
+
+**Validator client on a separate instance rather than sharing with Consensus Client**:
+FIXME: fill in.
+
+**EBS rather than instance storage for Consensus Client data**:
 EBS is cheaper.
 The cheapest EC2 instance with local storage is `is4gen.medium`, costing $0.14/hr on-demand, or $0.0432/hr spot.
 If we use spot, that's about $32/month.
@@ -53,22 +84,48 @@ However, looking at the spot price history, I see no price jumps in the last 3 m
 
 ## Costs
 
-These are for _us-west-2_.
+All AWS costs are for _us-west-2_.
 
-| Component                                               | Price/hour | Price/month |
-|---------------------------------------------------------|------------|-------------|
-| VPC with no NAT instances                               | free       | free        |
-| Consensus client EC2 auto-scaling group                 | free       | free        |
-| Consensus client EC2 c7g.medium spot instance           | $0.0177    | $13.17      |
-| Consensus client EBS volume - 20 GB root                | n/a        | $1.60       |
-| Consensus client EBS volume - 100 GB storage for Prater | n/a        | $8.00       |
-| Consensus client EBS volume - 3000 IOPS                 | free       | free        |
-| Consensus client EBS volume - 125 MB/s throughput       | free       | free        |
-| Consensus client data transfer - 7 MB/sec               | TBD        | TBD         |
-| Validator EC2 auto-scaling group                        | free       | free        |
-| Validator EC2 c7g.medium spot instance                  | $0.0177    | $13.17      |
-| Validator EBS volume - 20 GB root                       | n/a        | $1.60       |
-| **TOTAL**                                               | n/a        | **$37.54**  |
+### Execution client
+
+Chainstack receives about 360 requests per hour from my consensus client.
+That's 267,840 requests per month.
+Free tier includes 3,000,000 requests per month on a shared node, so I am well within the free tier.
+
+**Subtotal: free**
+
+### Consensus client
+
+| Component                                | Cost/month |
+|------------------------------------------|------------|
+| VPC with no NAT instances                | free       |
+| EC2 auto-scaling group                   | free       |
+| EC2 c7g.medium spot instance             | $13.17     |
+| EBS volume - 20 GB root                  | $1.60      |
+| EBS volume - 100 GB storage for Prater   | $8.00      |
+| EBS volume - 3000 IOPS                   | free       |
+| EBS volume - 125 MB/s throughput         | free       |
+| data transfer to the Internet            | TBD        |
+
+**Subtotal: $22.77 per month**
+
+### Validator client
+
+| Component                         | Cost/month |
+|-----------------------------------|------------|
+| EC2 auto-scaling group            | free       |
+| EC2 c7g.medium spot instance      | $13.17     |
+| EBS volume - 20 GB root           | $1.60      |
+| EBS volume - 3000 IOPS            | free       |
+| EBS volume - 125 MB/s throughput  | free       |
+| data transfer to Consensus Client | free       |
+| data transfer to the Internet     | TBD        |
+
+**Subtotal: $14.77 per month**
+
+### Total costs
+
+$37.54 per month, plus whatever data transfer to the Internet is.
 
 ## EC2 setup for both Consensus Client and Validator
 
