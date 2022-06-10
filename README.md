@@ -30,7 +30,7 @@ What works:
 
 What's yet to be done:
 
-* Validator setup documentation
+* Execution client infra, if self-hosted option is chosen
 * My validator is still pending activation, so I've yet to run a working validator.
   I may discover issues once validation starts, such as maybe we'll discover that EBS latency is too high
   and we need a local SSD instead.
@@ -40,41 +40,33 @@ What's yet to be done:
 ## Architecture
 
 ```
-(------------------)
-( Execution client )
-(  on Chainstack   )
-(------------------)
-         ^
-|--------------------|                  \
-|  Consensus client  |                  |
-| as an EC2 instance |                  |
-|  with EBS storage  |                  |
-|--------------------|                  |
-          ^                             | my VPC on AWS
-|------------------------|              |
-|    Validator client    |              |
-|   as an EC2 instance   |              |
-| with ephemeral storage |              |
-|------------------------|              /
+                  |-----------------------------|     \
+|-------------|   |      Execution client       |     |
+| EBS storage | + | as an optional EC2 instance |     |
+|-------------|   |      with EBS storage       |     |
+                  |-----------------------------|     |
+                                ^                     |
+                  |-----------------------------|     |
+|-------------|   |      Consensus client       |     | my VPC on AWS
+| EBS storage | + | as an optional EC2 instance |     |
+|-------------|   |      with EBS storage       |     |
+                  |-----------------------------|     |
+                                ^                     |
+                  |----------------------------|      |
+                  |      Validator client      |      |
+                  | as a required EC2 instance |      |
+                  |   with ephemeral storage   |      |
+                  |----------------------------|      /
 
 ```
 
 ## My architectural decisions
 
-**Execution client on Chainstack rather than self-hosted**:
-FIXME: fill in.
-
-**Consensus client self-hosted rather than hosted by a service**:
-FIXME: fill in.
-
-**Validator client on a separate instance rather than sharing with Consensus Client**:
-FIXME: fill in.
-
 **EBS rather than instance storage for Consensus Client data**:
-EBS is cheaper.
-The cheapest EC2 instance with local storage is `is4gen.medium`, costing $0.14/hr on-demand, or $0.0432/hr spot.
-If we use spot, that's about $32/month.
-That's roughly $15/month more expensive than using a cheaper instance with EBS storage.
+EBS is cheaper while being more reliable.
+EC2+EBS costs about $23/month (at least for Prater) and our data is durable.
+In contrast, the cheapest EC2 instance with local storage is `is4gen.medium`, costing $0.14/hr on-demand, or $0.0432/hr spot.
+If we use spot, that's about $32/month---plus the effect of losing data when replacing the instance.
 I may change my mind once I see how the whole system performs with the higher latency of EBS.
 
 **Spot rather than on-demand**:
@@ -82,11 +74,23 @@ This saves over 50% on EC2 instance costs, and one of this project's goals is to
 The main downside is a tiny risk of getting evicted and having to manually reconfigure the host.
 However, looking at the spot price history, I see no price jumps in the last 3 months.
 
+**c7g.medium for Consensus (+Validator)**:
+My workload can run on ARM, so my first choice is ARM for better value.
+The workload has very stable CPU, so we cannot take advantage of T4's CPU credit feature.
+I need at least 2 GB RAM but no more than 4 GB, plus good support for EBS and network.
+Hence C7G and M6G are contenders.
+c7g.medium is both cheaper and has better networking than m6g.medium, hence that's the victor.
+
 ## Costs
 
 All AWS costs are for _us-west-2_.
 
 ### Execution client
+
+The execution client is optionally self-hosted, though I have not set it up yet, so the stack
+is bare.
+
+I am trying to use Chainstack instead.
 
 Chainstack receives about 360 requests per hour from my consensus client.
 That's 267,840 requests per month.
@@ -111,6 +115,17 @@ Free tier includes 3,000,000 requests per month on a shared node, so I am well w
 
 ### Validator client
 
+The validator client has no choice but to be self-hosted, as that's the jewel of my Eth Staking project.
+
+The only choice is whether to self-host it on the same instance as the Consensus,
+or whether to spin up a separate EC2 instance.
+
+For now, I am trying self-hosting it on the same instance as Consensus.
+Frugality is the first reason, but the unintuitive second reason is system reliability.
+Since I am using EC2 spot market, having a separate instance increases my risk of having an outage.
+Having just one spot instance makes me a smaller target for EC2 spot's reaper.
+Meanwhile, reinstalling consensus+validator is almost no more work than reinstalling just consensus.
+
 | Component                         | Cost/month |
 |-----------------------------------|------------|
 | EC2 auto-scaling group            | free       |
@@ -127,6 +142,19 @@ Free tier includes 3,000,000 requests per month on a shared node, so I am well w
 
 $37.54 per month, plus whatever data transfer to the Internet is.
 
+## Deploy stack
+
+Smallest configuration is just one EC2 instance for Consensus + Validator:
+
+    cdk deploy --profile cdk \
+      --context IsExecutionSelfhosted=no \
+      --context IsConsensusSelfhosted=yes \
+      --context IsValidatorWithConsensus=yes
+
+## EC2 setup for Execution Client
+
+These don't exist yet because the CDK does not yet support an execution client.
+
 ## EC2 setup for both Consensus Client and Validator
 
 Both consensus client and validator are configured for Amazon Linux 2022 on EC2.
@@ -135,21 +163,23 @@ SSH to the EC2 instance over IPv6.
 
 On first login:
 
-    sudo dnf update --releasever=2022.0.20220518
-    sudo reboot  # for new kernel
+    sudo -- sh -c 'dnf update --releasever=2022.0.20220531 -y && reboot'
 
-    sudo dnf install git tmux
+After reboot:
+
+    sudo dnf install git tmux -y
 
 [Add 2 GB of swap](https://aws.amazon.com/premiumsupport/knowledge-center/ec2-memory-swap-file/),
 else the cheap instance we're using won't have enough RAM to build Lighthouse from source:
 
     sudo dd if=/dev/zero of=/swapfile bs=1MB count=2kB
+    sudo -- sh -c 'mkswap /swapfile && chmod 600 /swapfile && swapon /swapfile'
 
 ### Install Lighthouse
 
 Install prerequisites:
 
-    sudo dnf install git cmake clang
+    sudo dnf install git cmake clang -y
 
 [Install Rustup.](https://rustup.rs/)
 Proceed with defaults.
@@ -181,4 +211,11 @@ Start Lighthouse beacon node, preferably using [checkpoint sync](https://lightho
 
 ## Setup for Validator
 
-TBD.
+I choose to not store my validator key on EBS.
+Thus, each time I set up the machine, I upload the key to a fresh EC2 instance.
+With this approach, the validator needs only ephemeral storage for its data dir.
+
+After following the generic EC2 setup directions above,
+upload and import your validator key.
+
+Then start Lighthouse validator node!
