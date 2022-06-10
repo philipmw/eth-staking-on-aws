@@ -35,7 +35,6 @@ What's yet to be done:
   I may discover issues once validation starts, such as maybe we'll discover that EBS latency is too high
   and we need a local SSD instead.
 * I've yet to run a consensus client on mainnet, so I don't know how much storage is required for that.
-* Analysis of data transfer costs
 
 ## Architecture
 
@@ -77,11 +76,12 @@ However, looking at the spot price history, I see no price jumps in the last 3 m
 **c7g.medium for Consensus (+Validator)**:
 My workload can run on ARM, so my first choice is ARM for better value.
 The workload has very stable CPU, so we cannot take advantage of T4's CPU credit feature.
+I want to use Amazon Linux 2022, which A1 does not currently support.
 I need at least 2 GB RAM but no more than 4 GB, plus good support for EBS and network.
-Hence C7G and M6G are contenders.
+Hence, remaining contenders are C7G and M6G.
 c7g.medium is both cheaper and has better networking than m6g.medium, hence that's the victor.
 
-## Costs
+## Resources and costs
 
 All AWS costs are for _us-west-2_.
 
@@ -100,6 +100,21 @@ Free tier includes 3,000,000 requests per month on a shared node, so I am well w
 
 ### Consensus client
 
+When I run Consensus+Validator on the same EC2 instance, the load average is 0.25,
+and this is what RAM usage looks like:
+
+    $ free -m
+                   total        used        free      shared  buff/cache   available
+    Mem:            1837        1262         438           0         136         436
+    Swap:           1907         633        1273
+
+Hence I believe this instance (`c7g.medium`) is appropriately sized.
+
+Data transfer in is free, so we ignore it.
+Data transfer out is about 7 MBytes/minute according to CloudWatch metrics for the EC2 instance.
+That's 420 MBytes/hour, or 10 GBytes/day, or about 305 GBytes/month.
+The first 100 GBytes/month is free, followed by 205 GBytes at $0.09/GB, totaling $18.45.
+
 | Component                                | Cost/month |
 |------------------------------------------|------------|
 | VPC with no NAT instances                | free       |
@@ -109,9 +124,9 @@ Free tier includes 3,000,000 requests per month on a shared node, so I am well w
 | EBS volume - 100 GB storage for Prater   | $8.00      |
 | EBS volume - 3000 IOPS                   | free       |
 | EBS volume - 125 MB/s throughput         | free       |
-| data transfer to the Internet            | TBD        |
+| data transfer to the Internet            | $18.45     |
 
-**Subtotal: $22.77 per month**
+**Subtotal: $41.22 per month**
 
 ### Validator client
 
@@ -134,13 +149,31 @@ Meanwhile, reinstalling consensus+validator is almost no more work than reinstal
 | EBS volume - 3000 IOPS            | free       |
 | EBS volume - 125 MB/s throughput  | free       |
 | data transfer to Consensus Client | free       |
-| data transfer to the Internet     | TBD        |
+| data transfer to the Internet     | negligible |
 
 **Subtotal: $14.77 per month**
 
 ### Total costs
 
-$37.54 per month, plus whatever data transfer to the Internet is.
+The cheapest configuration is *just* the Validator, with Execution and Consensus clients coming
+from third party services like Chainstack and Infura. With the cheapest configuration, the cost is
+$15/month.
+
+The second-cheapest configuration is Consensus + Validator being on the same EC2 instance, with
+the Execution client hosted by a third-party service. This costs $42/month.
+
+## Comparison of self-hosting to Staking-as-a-Service providers
+
+In the following table, we assume [1 ETH = $1,600](https://coinmarketcap.com/currencies/ethereum/), and that the current solo staking [interest rate is 4.2%](https://ethereum.org/en/staking/).
+
+| Staking method                                                                      | Pros                                                 | Cons                                        | Cost/month     | Expense ratio | Net reward              |
+|-------------------------------------------------------------------------------------|------------------------------------------------------|---------------------------------------------|----------------|---------------|-------------------------|
+| self-hosted Execution client + self-hosted Consensus client + self-hosted Validator | least dependency on other services; keep both keys   | most expensive and operationally burdensome | ~$100/month    | ~0.20%        | 4.2% - 0.2% = **4.0%**  |
+| 3p Execution client + self-hosted Consensus client + self-hosted Validator          | cheaper and less ops load than above; keep both keys | costs more than above                       | $42/month      | 0.08%         | 4.2% - 0.08% = **4.1%** |
+| 3p Execution client + 3p Consensus client + self-hosted Validator                   | cheapest and least ops load; keep both keys          | dependency on two free services             | $15/month      | 0.03%         | 4.2% - 0.03% = **4.2%** |
+| [Stakely.io / Lido](https://stakely.io/en/ethereum-staking)                         | no ops load                                          | trust in Stakely/Lido                       | 10% of rewards | n/a           | 90% of 4.2% = **3.8%**  |
+| [Allnodes](https://www.allnodes.com/eth2/staking)                                   | no ops load                                          | trust in Allnodes                           | $5/month       | 0.01%         | 4.2 - 0.01% = **4.2%**  |
+| [Blox Staking](https://www.bloxstaking.com/)                                        | no ops load                                          | trust in Blox                               | free for now   | 0%            | **4.2%**                |
 
 ## Deploy stack
 
