@@ -186,6 +186,8 @@ Proceed with defaults.
 
 [Install Lighthouse.](https://lighthouse-book.sigmaprime.io/installation-source.html)
 
+It takes about 45 minutes to compile it on the EC2 instance.
+
 This concludes setup instructions generic to both Consensus Client and Validator.
 What follows are instructions specific to each instance.
 
