@@ -179,10 +179,12 @@ In the following table, we assume [1 ETH = $1,600](https://coinmarketcap.com/cur
 
 Smallest configuration is just one EC2 instance for Consensus + Validator:
 
-    cdk deploy --profile cdk \
+    cdk deploy \
       --context IsExecutionSelfhosted=no \
       --context IsConsensusSelfhosted=yes \
       --context IsValidatorWithConsensus=yes
+
+Once you deploy, subscribe yourself to the *AlarmTopic* SNS topic so you get notifications when something goes wrong.
 
 ## EC2 setup for Execution Client
 

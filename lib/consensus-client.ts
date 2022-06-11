@@ -1,14 +1,17 @@
 import {Construct} from "constructs";
-import {RemovalPolicy, Size} from 'aws-cdk-lib';
+import {Duration, RemovalPolicy, Size} from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 
 interface ConsensusClientProps {
   vpc: ec2.IVpc;
 }
 
 export class ConsensusClient extends Construct {
+  readonly outageAlarm: cloudwatch.CompositeAlarm;
+
   constructor(scope: Construct, id: string, { vpc }: ConsensusClientProps) {
     super(scope, id);
 
@@ -116,6 +119,45 @@ export class ConsensusClient extends Construct {
     });
 
     dataVolume.grantAttachVolume(instanceRole);
+
+    const ebsReadOpsAlarm = new cloudwatch.Alarm(this, 'EbsReadOpsAlarm', {
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      evaluationPeriods: 1,
+      metric: new cloudwatch.Metric({
+        dimensions: {
+          VolumeId: dataVolume.volumeId,
+        },
+        metricName: 'VolumeReadOps',
+        namespace: 'AWS/EBS',
+        period: Duration.minutes(5),
+        statistic: 'Sum',
+      }),
+      threshold: 10,
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+    });
+
+    const asgNetworkOutAlarm = new cloudwatch.Alarm(this, 'AsgNetworkOutAlarm', {
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      evaluationPeriods: 1,
+      metric: new cloudwatch.Metric({
+        dimensions: {
+          AutoScalingGroupName: asg.autoScalingGroupName,
+        },
+        metricName: 'NetworkOut',
+        namespace: 'AWS/EC2',
+        period: Duration.minutes(5),
+        statistic: 'Average',
+      }),
+      threshold: 1_000_000, // 1 MB/minute
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+    });
+
+    this.outageAlarm = new cloudwatch.CompositeAlarm(this, 'CompositeAlarm', {
+      alarmRule: cloudwatch.AlarmRule.anyOf(
+        asgNetworkOutAlarm,
+        ebsReadOpsAlarm,
+      ),
+    });
 
     /**
      * On-demand instance.

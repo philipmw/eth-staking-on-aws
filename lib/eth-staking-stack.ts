@@ -1,4 +1,6 @@
 import {Stack, StackProps} from 'aws-cdk-lib';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as cw_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import {Construct} from 'constructs';
 import {IPv6Vpc} from "./ipv6vpc";
 import {ConsensusClient} from "./consensus-client";
@@ -12,6 +14,8 @@ export class EthStakingStack extends Stack {
     const isExecutionSelfhosted = this.node.tryGetContext('IsExecutionSelfhosted') === 'yes';
     const isConsensusSelfhosted = this.node.tryGetContext("IsConsensusSelfhosted") === 'yes';
     const isValidatorWithConsensus = this.node.tryGetContext("IsValidatorWithConsensus") === 'yes';
+
+    const alarmSnsTopic = new sns.Topic(this, 'AlarmTopic', {});
 
     const vpc = new IPv6Vpc(this, 'Vpc', {
       availabilityZones: ["us-west-2b"], // A1 instances are not available in my us-west-2a
@@ -30,6 +34,7 @@ export class EthStakingStack extends Stack {
       const consensusClient = new ConsensusClient(this, 'ConsensusClient', {
         vpc,
       });
+      consensusClient.outageAlarm.addAlarmAction(new cw_actions.SnsAction(alarmSnsTopic));
     }
 
     if (!isValidatorWithConsensus) {
