@@ -36,6 +36,7 @@ What's yet to be done:
 
 * Execution client infra, if self-hosted option is chosen
 * I've yet to run a consensus client on mainnet, so I don't know how much storage is required for that.
+* Integration of validator client with CloudWatch metrics to get real-time data (and alarms) on attestations
 
 ## Architecture
 
@@ -145,6 +146,7 @@ The first 100 GBytes/month is free, followed by remaining 382 GBytes at $0.09/GB
 | EBS volume - 100 GB storage for Prater   | $8.00      |
 | EBS volume - 3000 IOPS                   | free       |
 | EBS volume - 125 MB/s throughput         | free       |
+| CloudWatch alarms                        | free       |
 | data transfer to the Internet            | $43.39     |
 
 **Subtotal: $66.16 per month**
