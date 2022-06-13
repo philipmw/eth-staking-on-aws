@@ -90,6 +90,7 @@ All AWS costs are for _us-west-2_.
 
 The execution client is optionally self-hosted, though I have not set it up yet, so the stack
 is bare.
+But my guess for its cost is about $100/month.
 
 I am trying to use [Chainstack](https://chainstack.com) instead.
 
@@ -97,7 +98,7 @@ Chainstack receives about 360 requests per hour from my consensus client.
 That's 267,840 requests per month.
 Free tier includes 3,000,000 requests per month on a shared node, so I am well within the free tier.
 
-**Subtotal: free**
+**Subtotal: rough guess is $100/month**
 
 ### Consensus client
 
@@ -116,9 +117,9 @@ RAM-wise, it is tight, but workable. Over three days, this is the worst of many 
 Hence I believe this instance (`c7g.medium`) is at its limits RAM-wise, but bearable.
 
 Data transfer in is free, so we ignore it.
-Data transfer out is about 7 MBytes/minute according to CloudWatch metrics for the EC2 instance.
-That's 420 MBytes/hour, or 10 GBytes/day, or about 305 GBytes/month.
-The first 100 GBytes/month is free, followed by 205 GBytes at $0.09/GB, totaling $18.45.
+Data transfer out is about 11 MBytes/minute according to CloudWatch metrics for the EC2 instance.
+That's 660 MBytes/hour, or 16 GBytes/day, or about 482 GBytes/month.
+The first 100 GBytes/month is free, followed by remaining 382 GBytes at $0.09/GB, totaling $43.39.
 
 | Component                                | Cost/month |
 |------------------------------------------|------------|
@@ -129,9 +130,9 @@ The first 100 GBytes/month is free, followed by 205 GBytes at $0.09/GB, totaling
 | EBS volume - 100 GB storage for Prater   | $8.00      |
 | EBS volume - 3000 IOPS                   | free       |
 | EBS volume - 125 MB/s throughput         | free       |
-| data transfer to the Internet            | $18.45     |
+| data transfer to the Internet            | $43.39     |
 
-**Subtotal: $41.22 per month**
+**Subtotal: $66.16 per month**
 
 ### Validator client
 
@@ -165,16 +166,23 @@ from third party services like Chainstack and Infura. With the cheapest configur
 $15/month.
 
 The second-cheapest configuration is Consensus + Validator being on the same EC2 instance, with
-the Execution client hosted by a third-party service. This costs $42/month.
+the Execution client hosted by a third-party service. This costs $66/month.
+Putting the Validator on its own dedicated EC2 instance increases the total cost to $81/month, but
+I don't see enough benefit to doing this.
+
+Finally, the maximal self-hosting option is to also host the the Execution client for an extra $100/month.
+So, self-hosted Execution (its own EC2 instance) plus self-hosted Consensus + Validator (sharing an EC2 instance)
+brings the total to $66 + 100 = $166/month, or $1,992/year.
 
 ## Comparison of self-hosting to Staking-as-a-Service providers
 
-In the following table, we assume [1 ETH = $1,600](https://coinmarketcap.com/currencies/ethereum/), and that the current solo staking [interest rate is 4.2%](https://ethereum.org/en/staking/).
+In the following table, we assume [1 ETH = $1,400](https://coinmarketcap.com/currencies/ethereum/), and that the current solo staking [interest rate is 4.2%](https://ethereum.org/en/staking/).
+Expense ratio is [operational cost] / [amount staked].
 
 | Staking method                                                                      | Pros                                                 | Cons                                        | Cost/month     | Expense ratio | Net reward              |
 |-------------------------------------------------------------------------------------|------------------------------------------------------|---------------------------------------------|----------------|---------------|-------------------------|
-| self-hosted Execution client + self-hosted Consensus client + self-hosted Validator | least dependency on other services; keep both keys   | most expensive and operationally burdensome | ~$100/month    | ~0.20%        | 4.2% - 0.2% = **4.0%**  |
-| 3p Execution client + self-hosted Consensus client + self-hosted Validator          | cheaper and less ops load than above; keep both keys | costs more than above                       | $42/month      | 0.08%         | 4.2% - 0.08% = **4.1%** |
+| self-hosted Execution client + self-hosted Consensus client + self-hosted Validator | least dependency on other services; keep both keys   | most expensive and operationally burdensome | $166/month     | 0.37%         | 4.2% - 0.37% = **3.8%** |
+| 3p Execution client + self-hosted Consensus client + self-hosted Validator          | cheaper and less ops load than above; keep both keys | dependency on one free service              | $66/month      | 0.15%         | 4.2% - 0.15% = **4.0%** |
 | 3p Execution client + 3p Consensus client + self-hosted Validator                   | cheapest and least ops load; keep both keys          | dependency on two free services             | $15/month      | 0.03%         | 4.2% - 0.03% = **4.2%** |
 | [Stakely.io / Lido](https://stakely.io/en/ethereum-staking)                         | no ops load                                          | trust in Stakely/Lido                       | 10% of rewards | n/a           | 90% of 4.2% = **3.8%**  |
 | [Allnodes](https://www.allnodes.com/eth2/staking)                                   | no ops load                                          | trust in Allnodes                           | $5/month       | 0.01%         | 4.2 - 0.01% = **4.2%**  |
