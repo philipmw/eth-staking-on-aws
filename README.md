@@ -11,6 +11,10 @@ This project's goals:
 4. To learn parts of AWS I don't come in contact with in my regular work;
 5. To challenge myself at designing the cheapest, yet reliable, infrastructure on AWS.
 
+As of June 2022, this project is [validating on Prater testnet](https://prater.beaconcha.in/validator/0xa56c644a75834fa276908caae13694f34d9e2481002997e3ef1fc34551088fdb63b9767472165557fe7606a9a86cddc0#deposits)!
+
+![screenshot of Consensus and Validator clients](./clients%20screenshot.png)
+
 ## Useful commands
 
 * `npm run build`   compile typescript to js
@@ -25,15 +29,12 @@ This project's goals:
 What works:
 
 * VPC with IPv4 and IPv6
-* Consensus Client instance, supporting both the needed public and private ports. *Lighthouse* runs and syncs successfully.
-* Validator instance, with ability to talk to Consensus Client instance over the network.
+* Consensus Client instance. *Lighthouse* runs and syncs Prater successfully.
+* Validator instance. It talks to my Consensus client and is [validating on Prater testnet](https://prater.beaconcha.in/validator/0xa56c644a75834fa276908caae13694f34d9e2481002997e3ef1fc34551088fdb63b9767472165557fe7606a9a86cddc0#deposits).
 
 What's yet to be done:
 
 * Execution client infra, if self-hosted option is chosen
-* My validator is still pending activation, so I've yet to run a working validator.
-  I may discover issues once validation starts, such as maybe we'll discover that EBS latency is too high
-  and we need a local SSD instead.
 * I've yet to run a consensus client on mainnet, so I don't know how much storage is required for that.
 
 ## Architecture
@@ -90,7 +91,7 @@ All AWS costs are for _us-west-2_.
 The execution client is optionally self-hosted, though I have not set it up yet, so the stack
 is bare.
 
-I am trying to use Chainstack instead.
+I am trying to use [Chainstack](https://chainstack.com) instead.
 
 Chainstack receives about 360 requests per hour from my consensus client.
 That's 267,840 requests per month.
@@ -100,15 +101,19 @@ Free tier includes 3,000,000 requests per month on a shared node, so I am well w
 
 ### Consensus client
 
-When I run Consensus+Validator on the same EC2 instance, the load average is 0.25,
-and this is what RAM usage looks like:
+The Lighthouse validator client supports multiple consensus clients, so I have it configured
+with two for redundancy: one, my own; and one, [Infura](https://infura.io).
+Infura receives less than 10 requests per day from my validator.
+
+When I run Consensus+Validator on the same EC2 instance, the load average is 0.25.
+RAM-wise, it is tight, but workable. Over three days, this is the worst of many samples I've taken:
 
     $ free -m
                    total        used        free      shared  buff/cache   available
-    Mem:            1837        1262         438           0         136         436
-    Swap:           1907         633        1273
+    Mem:            1837        1686          75           0          74          43
+    Swap:           1907         887        1020
 
-Hence I believe this instance (`c7g.medium`) is appropriately sized.
+Hence I believe this instance (`c7g.medium`) is at its limits RAM-wise, but bearable.
 
 Data transfer in is free, so we ignore it.
 Data transfer out is about 7 MBytes/minute according to CloudWatch metrics for the EC2 instance.
