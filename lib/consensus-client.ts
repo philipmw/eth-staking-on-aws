@@ -106,35 +106,15 @@ export class ConsensusClient extends Construct {
         subnetType: ec2.SubnetType.PUBLIC,
       },
     });
-
-    const dataVolume = new ec2.Volume(this, 'EbsVolume', {
-      // Ideally we we would specify `consensusClientInst.instanceAvailabilityZone`,
-      // but that leads to a circular dependency with `grantAttachVolume()`.
-      availabilityZone: vpc.availabilityZones[0],
-      encrypted: false,
-      removalPolicy: RemovalPolicy.RETAIN,
-      size: Size.gibibytes(100),
-      volumeName: 'ConsensusClientData',
-      volumeType: ec2.EbsDeviceVolumeType.GP3,
-    });
-
-    dataVolume.grantAttachVolume(instanceRole);
-
-    const ebsReadOpsAlarm = new cloudwatch.Alarm(this, 'EbsReadOpsAlarm', {
-      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
-      evaluationPeriods: 1,
-      metric: new cloudwatch.Metric({
-        dimensions: {
-          VolumeId: dataVolume.volumeId,
-        },
-        metricName: 'VolumeReadOps',
-        namespace: 'AWS/EBS',
-        period: Duration.minutes(5),
-        statistic: 'Sum',
-      }),
-      threshold: 10,
-      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
-    });
+    // Add detailed metrics to the ASG. According to the docs, they are free.
+    const cfnAsg = asg.node.defaultChild as autoscaling.CfnAutoScalingGroup;
+    cfnAsg.addPropertyOverride(
+      'MetricsCollection',
+      [
+        {
+          Granularity: '1Minute',
+          Metrics: ['GroupInServiceInstances']
+        }]);
 
     const asgNetworkOutAlarm = new cloudwatch.Alarm(this, 'AsgNetworkOutAlarm', {
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
@@ -152,8 +132,54 @@ export class ConsensusClient extends Construct {
       treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     });
 
+    const asgInServiceInstancesAlarm = new cloudwatch.Alarm(this, 'AsgInServiceInstancesAlarm', {
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      evaluationPeriods: 1,
+      metric: new cloudwatch.Metric({
+        dimensions: {
+          AutoScalingGroupName: asg.autoScalingGroupName,
+        },
+        metricName: 'GroupInServiceInstances',
+        namespace: 'AWS/AutoScaling',
+        period: Duration.minutes(1),
+        statistic: 'Minimum',
+      }),
+      threshold: 1,
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+    });
+
+    const dataVolume = new ec2.Volume(this, 'EbsVolume', {
+      // Ideally we we would specify `consensusClientInst.instanceAvailabilityZone`,
+      // but that leads to a circular dependency with `grantAttachVolume()`.
+      availabilityZone: vpc.availabilityZones[0],
+      encrypted: false,
+      removalPolicy: RemovalPolicy.RETAIN,
+      size: Size.gibibytes(100),
+      volumeName: 'ConsensusClientData',
+      volumeType: ec2.EbsDeviceVolumeType.GP3,
+    });
+
+    dataVolume.grantAttachVolume(instanceRole);
+
+    const ebsReadOpsAlarm = new cloudwatch.Alarm(this, 'EbsReadOpsAlarm', {
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      evaluationPeriods: 2,
+      metric: new cloudwatch.Metric({
+        dimensions: {
+          VolumeId: dataVolume.volumeId,
+        },
+        metricName: 'VolumeReadOps',
+        namespace: 'AWS/EBS',
+        period: Duration.minutes(5),
+        statistic: 'Sum',
+      }),
+      threshold: 1,
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+    });
+
     this.outageAlarm = new cloudwatch.CompositeAlarm(this, 'CompositeAlarm', {
       alarmRule: cloudwatch.AlarmRule.anyOf(
+        asgInServiceInstancesAlarm,
         asgNetworkOutAlarm,
         ebsReadOpsAlarm,
       ),
