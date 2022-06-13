@@ -70,9 +70,13 @@ If we use spot, that's about $32/month---plus the effect of losing data when rep
 I may change my mind once I see how the whole system performs with the higher latency of EBS.
 
 **Spot rather than on-demand**:
-This saves over 50% on EC2 instance costs, and one of this project's goals is to see how cheaply we can stake on AWS.
+This saves ~50% on EC2 instance costs, and one of this project's goals is to see how cheaply we can stake on AWS.
 The main downside is a tiny risk of getting evicted and having to manually reconfigure the host.
-However, looking at the spot price history, I see no price jumps in the last 3 months.
+The next-cheapest option is an *EC2 Instance Savings Plan*, for a savings of 34% over on-demand.
+At today's $/ETH exchange rate, a spot instance breaks even at 11 hours of outage per month compared to the
+*EC2 Instance Savings Plan*.
+This project sets up AWS alarms, so I'll be notified immediately when an outage happens.
+Hence, with optimism and naivete, today I believe I can keep this downtime low enough that a spot instance saves me money.
 
 **c7g.medium for Consensus (+Validator)**:
 My workload can run on ARM, so my first choice is ARM for better value.
@@ -82,7 +86,18 @@ I need at least 2 GB RAM but no more than 4 GB, plus good support for EBS and ne
 Hence, remaining contenders are C7G and M6G.
 c7g.medium is both cheaper and has better networking than m6g.medium, hence that's the victor.
 
-## Resources and costs
+## Income vs expense of solo staking
+
+From now til the end of the document, I assume [1 ETH = $1,400](https://coinmarketcap.com/currencies/ethereum/),
+we're staking 32 ETH, and the current solo staking [interest rate is 4.1%](https://ethereum.org/en/staking/).
+That's an income of $1,837 per year ($153 per month, $0.21 per hour).
+
+Expense of staking on AWS ranges from $15 to $166 per month, depending on how self-sufficient you want to be.
+Expenses are detailed in a section below.
+
+Thus, profit of staking on AWS ranges from negative to $138 per month.
+
+## Expenses of staking (AWS resources and their costs)
 
 All AWS costs are for _us-west-2_.
 
@@ -174,10 +189,9 @@ Finally, the maximal self-hosting option is to also host the the Execution clien
 So, self-hosted Execution (its own EC2 instance) plus self-hosted Consensus + Validator (sharing an EC2 instance)
 brings the total to $66 + 100 = $166/month, or $1,992/year.
 
-## Comparison of self-hosting to Staking-as-a-Service providers
+## Comparison of solo staking to Staking-as-a-Service providers
 
-In the following table, we assume [1 ETH = $1,400](https://coinmarketcap.com/currencies/ethereum/), and that the current solo staking [interest rate is 4.2%](https://ethereum.org/en/staking/).
-Expense ratio is [operational cost] / [amount staked].
+In the table below, expense ratio is [operational cost] / [amount staked].
 
 | Staking method                                                                      | Pros                                                 | Cons                                        | Cost/month     | Expense ratio | Net reward              |
 |-------------------------------------------------------------------------------------|------------------------------------------------------|---------------------------------------------|----------------|---------------|-------------------------|
