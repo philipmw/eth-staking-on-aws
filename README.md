@@ -15,6 +15,12 @@ As of June 2022, this project is [validating on Prater testnet](https://prater.b
 
 ![screenshot of Consensus and Validator clients](./clients%20screenshot.png)
 
+## Audience
+
+The audience of this repository and doc is folks who have a good grasp of Linux system administration
+and of Ethereum staking at a high level, and are interested in exploring staking on AWS:
+the "how" and "how much".
+
 ## Useful commands
 
 * `npm run build`   compile typescript to js
@@ -147,9 +153,11 @@ The first 100 GBytes/month is free, followed by remaining 382 GBytes at $0.09/GB
 | EBS volume - 3000 IOPS                   | free       |
 | EBS volume - 125 MB/s throughput         | free       |
 | CloudWatch alarms                        | free       |
+| CloudWatch logs for Lighthouse client    | TBD        |
+| CloudWatch metrics from logs (4)         | $1.20      |
 | data transfer to the Internet            | $43.39     |
 
-**Subtotal: $66.16 per month**
+**Subtotal: $67.36 per month**
 
 ### Validator client
 
@@ -232,6 +240,24 @@ On first login:
 After reboot:
 
     sudo dnf install git tmux -y
+
+[Create the CloudWatch agent configuration file](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/create-cloudwatch-agent-configuration-file.html)
+at `~/amazon-cloudwatch-agent-config.json`
+and configure it to run as user `cwagent`.
+
+[Install the CloudWatch agent](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/download-cloudwatch-agent-commandline.html),
+manually since we're not running Amazon Linux 2 or any OS listed:
+
+    curl -O https://s3.us-west-2.amazonaws.com/amazoncloudwatch-agent-us-west-2/amazon_linux/arm64/latest/amazon-cloudwatch-agent.rpm
+    sudo rpm -U ./amazon-cloudwatch-agent.rpm
+
+[Start the CloudWatch agent:](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/install-CloudWatch-Agent-on-EC2-Instance-fleet.html#start-CloudWatch-Agent-EC2-fleet)
+
+    sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:$HOME/amazon-cloudwatch-agent-config.json
+
+And observe its log:
+
+    tail -f /var/log/amazon/amazon-cloudwatch-agent/amazon-cloudwatch-agent.log
 
 [Add 2 GB of swap](https://aws.amazon.com/premiumsupport/knowledge-center/ec2-memory-swap-file/),
 else the cheap instance we're using won't have enough RAM to build Lighthouse from source:

@@ -4,6 +4,7 @@ import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as logs from 'aws-cdk-lib/aws-logs';
 
 interface ConsensusClientProps {
   vpc: ec2.IVpc;
@@ -65,6 +66,76 @@ export class ConsensusClient extends Construct {
     };
     const instanceRole = new iam.Role(this, 'InstanceRole', {
       assumedBy: new iam.ServicePrincipal("ec2.amazonaws.com"),
+    });
+
+    // CloudWatch agent
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: [
+        "cloudwatch:PutMetricData",
+        "ec2:DescribeTags", // for `ec2tagger`, part of the CloudWatch agent
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:DescribeLogStreams",
+        "logs:PutLogEvents",
+        "logs:PutRetentionPolicy",
+      ],
+      effect: iam.Effect.ALLOW,
+      resources: ['*'],
+    }));
+
+    // Metric filters
+    const beaconNodeLogGroup = logs.LogGroup.fromLogGroupName(this, 'BeaconNodeLogGroupImport',
+      'EthStaking-beacon-node-lighthouse'); // hardcoded in `amazon-cloudwatch-agent-config.json`
+
+    const metricNamespace = 'EthStaking/Lighthouse-Beacon-Node';
+    const syncedSlotMetricName = 'SyncedSlot';
+    const syncedSlotMetricFilter = new logs.MetricFilter(this, 'SyncedSlotMetricFilter', {
+      filterPattern: {
+        logPatternString: '{ $.msg = "Synced" }',
+      },
+      logGroup: beaconNodeLogGroup,
+      metricNamespace,
+      metricName: syncedSlotMetricName,
+      metricValue: '$.slot',
+    });
+    const syncedPeersMetricFilter = new logs.MetricFilter(this, 'SyncedPeersMetricFilter', {
+      filterPattern: {
+        logPatternString: '{ $.msg = "Synced" }',
+      },
+      logGroup: beaconNodeLogGroup,
+      metricNamespace,
+      metricName: 'SyncedPeers',
+      metricValue: '$.peers',
+    });
+    const syncedEpochMetricFilter = new logs.MetricFilter(this, 'SyncedEpochMetricFilter', {
+      filterPattern: {
+        logPatternString: '{ $.msg = "Synced" }',
+      },
+      logGroup: beaconNodeLogGroup,
+      metricNamespace,
+      metricName: 'SyncedEpoch',
+      metricValue: '$.epoch',
+    });
+    const syncedFinalizedEpochMetricFilter = new logs.MetricFilter(this, 'SyncedFinalizedEpochMetricFilter', {
+      filterPattern: {
+        logPatternString: '{ $.msg = "Synced" }',
+      },
+      logGroup: beaconNodeLogGroup,
+      metricNamespace,
+      metricName: 'SyncedFinalizedEpoch',
+      metricValue: '$.finalized_epoch',
+    });
+    const syncedCountAlarm = new cloudwatch.Alarm(this, 'SyncedCountAlarm', {
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      evaluationPeriods: 1,
+      metric: new cloudwatch.Metric({
+        metricName: syncedSlotMetricName,
+        namespace: metricNamespace,
+        period: Duration.minutes(5),
+        statistic: 'Minimum',
+      }),
+      threshold: 3000000, // reasonable value
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     });
 
     const launchTemplate = new ec2.LaunchTemplate(this, 'LaunchTemplate', {
@@ -179,6 +250,7 @@ export class ConsensusClient extends Construct {
 
     this.outageAlarm = new cloudwatch.CompositeAlarm(this, 'CompositeAlarm', {
       alarmRule: cloudwatch.AlarmRule.anyOf(
+        syncedCountAlarm,
         asgInServiceInstancesAlarm,
         asgNetworkOutAlarm,
         ebsReadOpsAlarm,
