@@ -12,6 +12,7 @@ interface ConsensusClientProps {
 
 export class ConsensusClient extends Construct {
   readonly outageAlarm: cloudwatch.CompositeAlarm;
+  readonly dashboardWidgets: cloudwatch.IWidget[][];
 
   constructor(scope: Construct, id: string, { vpc }: ConsensusClientProps) {
     super(scope, id);
@@ -125,7 +126,7 @@ export class ConsensusClient extends Construct {
       metricName: 'SyncedFinalizedEpoch',
       metricValue: '$.finalized_epoch',
     });
-    const syncedCountAlarm = new cloudwatch.Alarm(this, 'SyncedCountAlarm', {
+    const syncedSlotAlarm = new cloudwatch.Alarm(this, 'SyncedSlotAlarm', {
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
       evaluationPeriods: 1,
       metric: new cloudwatch.Metric({
@@ -187,34 +188,45 @@ export class ConsensusClient extends Construct {
           Metrics: ['GroupInServiceInstances']
         }]);
 
+    const asgNetworkOutMetric = new cloudwatch.Metric({
+      dimensions: {
+        AutoScalingGroupName: asg.autoScalingGroupName,
+      },
+      metricName: 'NetworkOut',
+      namespace: 'AWS/EC2',
+      period: Duration.minutes(5),
+      statistic: 'Average',
+    });
     const asgNetworkOutAlarm = new cloudwatch.Alarm(this, 'AsgNetworkOutAlarm', {
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
       evaluationPeriods: 1,
-      metric: new cloudwatch.Metric({
-        dimensions: {
-          AutoScalingGroupName: asg.autoScalingGroupName,
-        },
-        metricName: 'NetworkOut',
-        namespace: 'AWS/EC2',
-        period: Duration.minutes(5),
-        statistic: 'Average',
-      }),
+      metric: asgNetworkOutMetric,
       threshold: 1_000_000, // 1 MB/minute
       treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     });
 
+    const asgCpuUtilizationMetric = new cloudwatch.Metric({
+      dimensions: {
+        AutoScalingGroupName: asg.autoScalingGroupName,
+      },
+      metricName: 'CPUUtilization',
+      namespace: 'AWS/EC2',
+      period: Duration.minutes(1),
+      statistic: 'Average',
+    });
+    const asgInServiceInstancesMetric = new cloudwatch.Metric({
+      dimensions: {
+        AutoScalingGroupName: asg.autoScalingGroupName,
+      },
+      metricName: 'GroupInServiceInstances',
+      namespace: 'AWS/AutoScaling',
+      period: Duration.minutes(1),
+      statistic: 'Minimum',
+    });
     const asgInServiceInstancesAlarm = new cloudwatch.Alarm(this, 'AsgInServiceInstancesAlarm', {
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
       evaluationPeriods: 1,
-      metric: new cloudwatch.Metric({
-        dimensions: {
-          AutoScalingGroupName: asg.autoScalingGroupName,
-        },
-        metricName: 'GroupInServiceInstances',
-        namespace: 'AWS/AutoScaling',
-        period: Duration.minutes(1),
-        statistic: 'Minimum',
-      }),
+      metric: asgInServiceInstancesMetric,
       threshold: 1,
       treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     });
@@ -232,30 +244,90 @@ export class ConsensusClient extends Construct {
 
     dataVolume.grantAttachVolume(instanceRole);
 
+    const ebsReadOpsMetric = new cloudwatch.Metric({
+      dimensions: {
+        VolumeId: dataVolume.volumeId,
+      },
+      metricName: 'VolumeReadOps',
+      namespace: 'AWS/EBS',
+      period: Duration.minutes(5),
+      statistic: 'Sum',
+    });
     const ebsReadOpsAlarm = new cloudwatch.Alarm(this, 'EbsReadOpsAlarm', {
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
       evaluationPeriods: 2,
-      metric: new cloudwatch.Metric({
-        dimensions: {
-          VolumeId: dataVolume.volumeId,
-        },
-        metricName: 'VolumeReadOps',
-        namespace: 'AWS/EBS',
-        period: Duration.minutes(5),
-        statistic: 'Sum',
-      }),
+      metric: ebsReadOpsMetric,
       threshold: 1,
       treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     });
 
     this.outageAlarm = new cloudwatch.CompositeAlarm(this, 'CompositeAlarm', {
       alarmRule: cloudwatch.AlarmRule.anyOf(
-        syncedCountAlarm,
+        syncedSlotAlarm,
         asgInServiceInstancesAlarm,
         asgNetworkOutAlarm,
         ebsReadOpsAlarm,
       ),
     });
+
+    this.dashboardWidgets = [
+      [
+        new cloudwatch.TextWidget({
+          height: 1,
+          markdown: '## Ethereum Consensus layer',
+          width: 6*2,
+        }),
+      ],
+      [
+        new cloudwatch.GraphWidget({
+          left: [
+            new cloudwatch.Metric({
+              metricName: syncedSlotMetricName,
+              namespace: metricNamespace,
+              period: Duration.minutes(5),
+              statistic: 'Minimum',
+            }),
+          ],
+        }),
+        new cloudwatch.GraphWidget({
+          left: [
+            new cloudwatch.Metric({
+              metricName: 'SyncedEpoch',
+              namespace: metricNamespace,
+              period: Duration.minutes(5),
+              statistic: 'Minimum',
+            }),
+            new cloudwatch.Metric({
+              metricName: 'SyncedFinalizedEpoch',
+              namespace: metricNamespace,
+              period: Duration.minutes(5),
+              statistic: 'Minimum',
+            }),
+          ],
+        }),
+      ],
+      [
+        new cloudwatch.TextWidget({
+          height: 1,
+          markdown: '## Consensus client infrastructure',
+          width: 6*4,
+        }),
+      ],
+      [
+        new cloudwatch.AlarmWidget({
+          alarm: asgInServiceInstancesAlarm,
+        }),
+        new cloudwatch.GraphWidget({
+          left: [asgCpuUtilizationMetric],
+        }),
+        new cloudwatch.AlarmWidget({
+          alarm: asgNetworkOutAlarm,
+        }),
+        new cloudwatch.AlarmWidget({
+          alarm: ebsReadOpsAlarm,
+        }),
+      ]
+    ];
 
     /**
      * On-demand instance.

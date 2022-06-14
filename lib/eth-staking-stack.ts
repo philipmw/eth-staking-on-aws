@@ -1,6 +1,7 @@
 import {Stack, StackProps} from 'aws-cdk-lib';
-import * as sns from 'aws-cdk-lib/aws-sns';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cw_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import {Construct} from 'constructs';
 import {IPv6Vpc} from "./ipv6vpc";
 import {ConsensusClient} from "./consensus-client";
@@ -16,6 +17,7 @@ export class EthStakingStack extends Stack {
     const isValidatorWithConsensus = this.node.tryGetContext("IsValidatorWithConsensus") === 'yes';
 
     const alarmSnsTopic = new sns.Topic(this, 'AlarmTopic', {});
+    let dashboardWidgets: cloudwatch.IWidget[][] = [];
 
     const vpc = new IPv6Vpc(this, 'Vpc', {
       availabilityZones: ["us-west-2b"], // A1 instances are not available in my us-west-2a
@@ -34,6 +36,7 @@ export class EthStakingStack extends Stack {
       const consensusClient = new ConsensusClient(this, 'ConsensusClient', {
         vpc,
       });
+      dashboardWidgets = dashboardWidgets.concat(consensusClient.dashboardWidgets);
       consensusClient.outageAlarm.addAlarmAction(new cw_actions.SnsAction(alarmSnsTopic));
     }
 
@@ -42,6 +45,11 @@ export class EthStakingStack extends Stack {
         vpc,
       });
     }
+
+    const metricsDashboard = new cloudwatch.Dashboard(this, 'MetricsDashboard', {
+      dashboardName: 'Ethereum-staking',
+      widgets: dashboardWidgets,
+    });
 
   }
 }

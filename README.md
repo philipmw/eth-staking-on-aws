@@ -38,6 +38,7 @@ What works:
 * Consensus Client instance. *Lighthouse* runs and syncs Prater successfully.
 * Consensus Client is integrated with CloudWatch logs, and logs emit metrics such as which slot was last synced.
 * Alarms for Consensus Client outages
+* CloudWatch dashboard for relevant metrics and alarms
 * Validator instance. It talks to my Consensus client and is [validating on Prater testnet](https://prater.beaconcha.in/validator/0xa56c644a75834fa276908caae13694f34d9e2481002997e3ef1fc34551088fdb63b9767472165557fe7606a9a86cddc0#deposits).
 
 What's yet to be done:
@@ -157,6 +158,7 @@ The first 100 GBytes/month is free, followed by remaining 382 GBytes at $0.09/GB
 | CloudWatch alarms                        | free       |
 | CloudWatch logs for Lighthouse client    | TBD        |
 | CloudWatch metrics from logs (4)         | $1.20      |
+| CloudWatch dashboard for metrics         | free       |
 | data transfer to the Internet            | $43.39     |
 
 **Subtotal: $67.36 per month**
