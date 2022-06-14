@@ -36,13 +36,15 @@ What works:
 
 * VPC with IPv4 and IPv6
 * Consensus Client instance. *Lighthouse* runs and syncs Prater successfully.
+* Consensus Client is integrated with CloudWatch logs, and logs emit metrics such as which slot was last synced.
+* Alarms for Consensus Client outages
 * Validator instance. It talks to my Consensus client and is [validating on Prater testnet](https://prater.beaconcha.in/validator/0xa56c644a75834fa276908caae13694f34d9e2481002997e3ef1fc34551088fdb63b9767472165557fe7606a9a86cddc0#deposits).
 
 What's yet to be done:
 
 * Execution client infra, if self-hosted option is chosen
 * I've yet to run a consensus client on mainnet, so I don't know how much storage is required for that.
-* Integration of validator client with CloudWatch metrics to get real-time data (and alarms) on attestations
+* Integration of validator client with CloudWatch logs and metrics to get real-time data and alarms on attestations
 
 ## Architecture
 
