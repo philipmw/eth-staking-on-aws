@@ -85,7 +85,7 @@ export class ConsensusClient extends Construct {
     }));
 
     // Metric filters
-    const beaconNodeLogGroup = logs.LogGroup.fromLogGroupName(this, 'BeaconNodeLogGroupImport',
+    const logGroup = logs.LogGroup.fromLogGroupName(this, 'BeaconNodeLogGroupImport',
       'EthStaking-beacon-node-lighthouse'); // hardcoded in `amazon-cloudwatch-agent-config.json`
 
     const metricNamespace = 'EthStaking/Lighthouse-Beacon-Node';
@@ -94,7 +94,7 @@ export class ConsensusClient extends Construct {
       filterPattern: {
         logPatternString: '{ $.msg = "Synced" }',
       },
-      logGroup: beaconNodeLogGroup,
+      logGroup: logGroup,
       metricNamespace,
       metricName: syncedSlotMetricName,
       metricValue: '$.slot',
@@ -103,7 +103,7 @@ export class ConsensusClient extends Construct {
       filterPattern: {
         logPatternString: '{ $.msg = "Synced" }',
       },
-      logGroup: beaconNodeLogGroup,
+      logGroup: logGroup,
       metricNamespace,
       metricName: 'SyncedPeers',
       metricValue: '$.peers',
@@ -112,7 +112,7 @@ export class ConsensusClient extends Construct {
       filterPattern: {
         logPatternString: '{ $.msg = "Synced" }',
       },
-      logGroup: beaconNodeLogGroup,
+      logGroup: logGroup,
       metricNamespace,
       metricName: 'SyncedEpoch',
       metricValue: '$.epoch',
@@ -121,7 +121,7 @@ export class ConsensusClient extends Construct {
       filterPattern: {
         logPatternString: '{ $.msg = "Synced" }',
       },
-      logGroup: beaconNodeLogGroup,
+      logGroup: logGroup,
       metricNamespace,
       metricName: 'SyncedFinalizedEpoch',
       metricValue: '$.finalized_epoch',
@@ -275,7 +275,7 @@ export class ConsensusClient extends Construct {
         new cloudwatch.TextWidget({
           height: 1,
           markdown: '## Ethereum Consensus layer',
-          width: 6*2,
+          width: 6*3,
         }),
       ],
       [
@@ -284,7 +284,7 @@ export class ConsensusClient extends Construct {
             new cloudwatch.Metric({
               metricName: syncedSlotMetricName,
               namespace: metricNamespace,
-              period: Duration.minutes(5),
+              period: Duration.minutes(1),
               statistic: 'Minimum',
             }),
           ],
@@ -294,14 +294,24 @@ export class ConsensusClient extends Construct {
             new cloudwatch.Metric({
               metricName: 'SyncedEpoch',
               namespace: metricNamespace,
-              period: Duration.minutes(5),
+              period: Duration.minutes(1),
               statistic: 'Minimum',
             }),
             new cloudwatch.Metric({
               metricName: 'SyncedFinalizedEpoch',
               namespace: metricNamespace,
-              period: Duration.minutes(5),
+              period: Duration.minutes(1),
               statistic: 'Minimum',
+            }),
+          ],
+        }),
+        new cloudwatch.GraphWidget({
+          left: [
+            new cloudwatch.Metric({
+              metricName: 'SyncedPeers',
+              namespace: metricNamespace,
+              period: Duration.minutes(1),
+              statistic: 'Average',
             }),
           ],
         }),

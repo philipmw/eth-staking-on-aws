@@ -37,15 +37,15 @@ What works:
 * VPC with IPv4 and IPv6
 * Consensus Client instance. *Lighthouse* runs and syncs Prater successfully.
 * Consensus Client is integrated with CloudWatch logs, and logs emit metrics such as which slot was last synced.
-* Alarms for Consensus Client outages
-* CloudWatch dashboard for relevant metrics and alarms
 * Validator instance. It talks to my Consensus client and is [validating on Prater testnet](https://prater.beaconcha.in/validator/0xa56c644a75834fa276908caae13694f34d9e2481002997e3ef1fc34551088fdb63b9767472165557fe7606a9a86cddc0#deposits).
+* Validator instance is integrated with CloudWatch logs, and logs emit metrics such as how many beacon nodes it is synced with.
+* Alarms for Consensus Client and/or Validator outages and anomalies
+* Dashboard for relevant metrics and alarms
 
 What's yet to be done:
 
 * Execution client infra, if self-hosted option is chosen
 * I've yet to run a consensus client on mainnet, so I don't know how much storage is required for that.
-* Integration of validator client with CloudWatch logs and metrics to get real-time data and alarms on attestations
 
 ## Architecture
 
@@ -155,9 +155,9 @@ The first 100 GBytes/month is free, followed by remaining 382 GBytes at $0.09/GB
 | EBS volume - 100 GB storage for Prater   | $8.00      |
 | EBS volume - 3000 IOPS                   | free       |
 | EBS volume - 125 MB/s throughput         | free       |
-| CloudWatch alarms                        | free       |
 | CloudWatch logs for Lighthouse client    | TBD        |
 | CloudWatch metrics from logs (4)         | $1.20      |
+| CloudWatch alarms for metrics            | free       |
 | CloudWatch dashboard for metrics         | free       |
 | data transfer to the Internet            | $43.39     |
 
@@ -176,32 +176,36 @@ Since I am using EC2 spot market, having a separate instance increases my risk o
 Having just one spot instance makes me a smaller target for EC2 spot's reaper.
 Meanwhile, reinstalling consensus+validator is almost no more work than reinstalling just consensus.
 
-| Component                         | Cost/month |
-|-----------------------------------|------------|
-| EC2 auto-scaling group            | free       |
-| EC2 c7g.medium spot instance      | $13.17     |
-| EBS volume - 20 GB root           | $1.60      |
-| EBS volume - 3000 IOPS            | free       |
-| EBS volume - 125 MB/s throughput  | free       |
-| data transfer to Consensus Client | free       |
-| data transfer to the Internet     | negligible |
+| Component                             | Cost/month |
+|---------------------------------------|------------|
+| EC2 auto-scaling group                | free       |
+| EC2 c7g.medium spot instance          | $13.17     |
+| EBS volume - 20 GB root               | $1.60      |
+| EBS volume - 3000 IOPS                | free       |
+| EBS volume - 125 MB/s throughput      | free       |
+| CloudWatch logs for Lighthouse client | TBD        |
+| CloudWatch metrics from logs (3)      | $0.90      |
+| CloudWatch alarms for metrics         | free       |
+| CloudWatch dashboard for metrics      | free       |
+| data transfer to Consensus Client     | free       |
+| data transfer to the Internet         | negligible |
 
-**Subtotal: $14.77 per month**
+**Subtotal: $15.67 per month**
 
 ### Total costs
 
 The cheapest configuration is *just* the Validator, with Execution and Consensus clients coming
 from third party services like Chainstack and Infura. With the cheapest configuration, the cost is
-$15/month.
+$16/month.
 
 The second-cheapest configuration is Consensus + Validator being on the same EC2 instance, with
-the Execution client hosted by a third-party service. This costs $66/month.
-Putting the Validator on its own dedicated EC2 instance increases the total cost to $81/month, but
+the Execution client hosted by a third-party service. This costs $67/month.
+Putting the Validator on its own dedicated EC2 instance increases the total cost, and
 I don't see enough benefit to doing this.
 
 Finally, the maximal self-hosting option is to also host the the Execution client for an extra $100/month.
 So, self-hosted Execution (its own EC2 instance) plus self-hosted Consensus + Validator (sharing an EC2 instance)
-brings the total to $66 + 100 = $166/month, or $1,992/year.
+brings the total to $67 + 100 = $167/month, or $2,004/year.
 
 ## Comparison of solo staking to Staking-as-a-Service providers
 
@@ -209,9 +213,9 @@ In the table below, expense ratio is [operational cost] / [amount staked].
 
 | Staking method                                                                      | Pros                                                 | Cons                                        | Cost/month     | Expense ratio | Net reward              |
 |-------------------------------------------------------------------------------------|------------------------------------------------------|---------------------------------------------|----------------|---------------|-------------------------|
-| self-hosted Execution client + self-hosted Consensus client + self-hosted Validator | least dependency on other services; keep both keys   | most expensive and operationally burdensome | $166/month     | 0.37%         | 4.2% - 0.37% = **3.8%** |
-| 3p Execution client + self-hosted Consensus client + self-hosted Validator          | cheaper and less ops load than above; keep both keys | dependency on one free service              | $66/month      | 0.15%         | 4.2% - 0.15% = **4.0%** |
-| 3p Execution client + 3p Consensus client + self-hosted Validator                   | cheapest and least ops load; keep both keys          | dependency on two free services             | $15/month      | 0.03%         | 4.2% - 0.03% = **4.2%** |
+| self-hosted Execution client + self-hosted Consensus client + self-hosted Validator | least dependency on other services; keep both keys   | most expensive and operationally burdensome | $167/month     | 0.37%         | 4.2% - 0.37% = **3.8%** |
+| 3p Execution client + self-hosted Consensus client + self-hosted Validator          | cheaper and less ops load than above; keep both keys | dependency on one free service              | $67/month      | 0.15%         | 4.2% - 0.15% = **4.0%** |
+| 3p Execution client + 3p Consensus client + self-hosted Validator                   | cheapest and least ops load; keep both keys          | dependency on two free services             | $16/month      | 0.03%         | 4.2% - 0.03% = **4.2%** |
 | [Stakely.io / Lido](https://stakely.io/en/ethereum-staking)                         | no ops load                                          | trust in Stakely/Lido                       | 10% of rewards | n/a           | 90% of 4.2% = **3.8%**  |
 | [Allnodes](https://www.allnodes.com/eth2/staking)                                   | no ops load                                          | trust in Allnodes                           | $5/month       | 0.01%         | 4.2 - 0.01% = **4.2%**  |
 | [Blox Staking](https://www.bloxstaking.com/)                                        | no ops load                                          | trust in Blox                               | free for now   | 0%            | **4.2%**                |
@@ -247,7 +251,10 @@ After reboot:
 
 [Create the CloudWatch agent configuration file](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/create-cloudwatch-agent-configuration-file.html)
 at `~/amazon-cloudwatch-agent-config.json`
-and configure it to run as user `cwagent`.
+and configure it to run as user `ec2-user`.
+(The reason for the same user is that Lighthouse forces `rw-------` permissions on its log files.)
+Configure the CloudWatch agent to ingest both the beacon node and validator files.
+You can use my own agent config file for reference; it is in this repo at `./amazon-cloudwatch-agent-configs/bn-and-vc-same-instance.json`.
 
 [Install the CloudWatch agent](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/download-cloudwatch-agent-commandline.html),
 manually since we're not running Amazon Linux 2 or any OS listed:
@@ -305,6 +312,14 @@ Mount the Lighthouse data dir:
 
 Start Lighthouse beacon node, preferably using [checkpoint sync](https://lighthouse-book.sigmaprime.io/checkpoint-sync.html).
 
+Use the following command-line arguments for logging:
+
+      --logfile-debug-level info \
+      --log-format JSON \
+      --logfile ~/lighthouse-bn-logs/current.log \
+      --logfile-max-number 10 \
+      --logfile-max-size 10 \
+
 ## Setup for Validator
 
 I choose to not store my validator key on EBS.
@@ -313,5 +328,13 @@ With this approach, the validator needs only ephemeral storage for its data dir.
 
 After following the generic EC2 setup directions above,
 upload and import your validator key.
+
+Use the following command-line arguments for logging:
+
+      --logfile-debug-level info \
+      --log-format JSON \
+      --logfile ~/lighthouse-vc-logs/current.log \
+      --logfile-max-number 10 \
+      --logfile-max-size 10 \
 
 Then start Lighthouse validator node!

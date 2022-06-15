@@ -12,9 +12,9 @@ export class EthStakingStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    const isExecutionSelfhosted = this.node.tryGetContext('IsExecutionSelfhosted') === 'yes';
-    const isConsensusSelfhosted = this.node.tryGetContext("IsConsensusSelfhosted") === 'yes';
-    const isValidatorWithConsensus = this.node.tryGetContext("IsValidatorWithConsensus") === 'yes';
+    const isExecutionSelfhosted = this.getBooleanContextKey('IsExecutionSelfhosted');
+    const isConsensusSelfhosted = this.getBooleanContextKey("IsConsensusSelfhosted");
+    const isValidatorWithConsensus = this.getBooleanContextKey("IsValidatorWithConsensus");
 
     const alarmSnsTopic = new sns.Topic(this, 'AlarmTopic', {});
     let dashboardWidgets: cloudwatch.IWidget[][] = [];
@@ -40,16 +40,29 @@ export class EthStakingStack extends Stack {
       consensusClient.outageAlarm.addAlarmAction(new cw_actions.SnsAction(alarmSnsTopic));
     }
 
-    if (!isValidatorWithConsensus) {
-      const validationClient = new Validator(this, 'Validator', {
-        vpc,
-      });
-    }
+    const validatorClient = new Validator(this, 'Validator', {
+      vpc,
+      isValidatorWithConsensus,
+    });
+    dashboardWidgets = dashboardWidgets.concat(validatorClient.dashboardWidgets);
 
     const metricsDashboard = new cloudwatch.Dashboard(this, 'MetricsDashboard', {
       dashboardName: 'Ethereum-staking',
       widgets: dashboardWidgets,
     });
 
+  }
+
+  private getBooleanContextKey(key: string): boolean {
+    const value = this.node.tryGetContext(key);
+
+    if (value == undefined) {
+      throw new Error(`Expected context key <<${key}>>, but one was not provided`);
+    }
+    if (value !== 'yes' && value !== 'no') {
+      throw new Error(`Expected context value for <<${key}>> to be "yes" or "no", but it was <<${value}>>`);
+    }
+
+    return value === 'yes';
   }
 }
