@@ -11,25 +11,35 @@ interface ValidatorProps {
   isValidatorWithConsensus: boolean;
 }
 
+interface IObservation {
+  widgets: cloudwatch.IWidget[][];
+  alarms: cloudwatch.IAlarm[];
+}
+
 export class Validator extends Construct {
-  readonly outageAlarm: cloudwatch.CompositeAlarm;
+  readonly alarms: cloudwatch.IAlarm[];
   readonly dashboardWidgets: cloudwatch.IWidget[][];
 
   constructor(scope: Construct, id: string, props: ValidatorProps) {
     super(scope, id);
 
-    if (!props.isValidatorWithConsensus) {
-      this.createEc2Instance(scope, id, props);
-    }
-
     // This roundabout way of assigning instance variables is that I want to keep them `readonly`,
     // so I cannot assign them anywhere but in the constructor.
-    const loggingAndMetrics = this.createLoggingAndMetrics(scope, id);
-    this.dashboardWidgets = loggingAndMetrics.widgets;
-    this.outageAlarm = loggingAndMetrics.alarm;
+    const clientObservation = this.createClientLoggingAndMetrics(scope);
+
+    let instanceObservation;
+    if (!props.isValidatorWithConsensus) {
+      instanceObservation = this.createEc2Instance(scope, id, props);
+    }
+
+    this.dashboardWidgets = clientObservation.widgets.concat(instanceObservation?.widgets || []);
+    this.alarms = [
+      ...clientObservation.alarms,
+      ...(instanceObservation?.alarms || []),
+    ];
   }
 
-  private createEc2Instance(scope: Construct, id: string, { vpc }: ValidatorProps) {
+  private createEc2Instance(scope: Construct, id: string, { vpc }: ValidatorProps): IObservation {
     const sg = new ec2.SecurityGroup(this, 'SecGroup', {
       vpc,
     });
@@ -79,7 +89,7 @@ export class Validator extends Construct {
         }
       ],
       ebsOptimized: true,
-      instanceType: new ec2.InstanceType('c7g.medium'), // until https://github.com/aws/aws-cdk/pull/20541 is in
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO),
       keyName: 'home mac',
       machineImage: new ec2.AmazonLinuxImage({
         cpuType: ec2.AmazonLinuxCpuType.ARM_64,
@@ -110,9 +120,122 @@ export class Validator extends Construct {
         subnetType: ec2.SubnetType.PUBLIC,
       },
     });
+    // Add detailed metrics to the ASG. According to the docs, they are free.
+    const cfnAsg = asg.node.defaultChild as autoscaling.CfnAutoScalingGroup;
+    cfnAsg.addPropertyOverride(
+      'MetricsCollection',
+      [
+        {
+          Granularity: '1Minute',
+          Metrics: ['GroupInServiceInstances']
+        }]);
+
+    const asgCpuUtilizationMetric = new cloudwatch.Metric({
+      dimensions: {
+        AutoScalingGroupName: asg.autoScalingGroupName,
+      },
+      metricName: 'CPUUtilization',
+      namespace: 'AWS/EC2',
+      period: Duration.minutes(5),
+      statistic: 'Average',
+    });
+    const asgCpuCreditUsageMetric = new cloudwatch.Metric({
+      dimensions: {
+        AutoScalingGroupName: asg.autoScalingGroupName,
+      },
+      metricName: 'CPUCreditUsage',
+      namespace: 'AWS/EC2',
+      period: Duration.minutes(5),
+      statistic: 'Average',
+    });
+    const asgCpuSurplusCreditBalance = new cloudwatch.Metric({
+      dimensions: {
+        AutoScalingGroupName: asg.autoScalingGroupName,
+      },
+      metricName: 'CPUSurplusCreditBalance',
+      namespace: 'AWS/EC2',
+      period: Duration.minutes(5),
+      statistic: 'Average',
+    });
+    const asgCpuSurplusCreditsCharged = new cloudwatch.Metric({
+      dimensions: {
+        AutoScalingGroupName: asg.autoScalingGroupName,
+      },
+      metricName: 'CPUSurplusCreditsCharged',
+      namespace: 'AWS/EC2',
+      period: Duration.minutes(5),
+      statistic: 'Average',
+    });
+    const asgInServiceInstancesMetric = new cloudwatch.Metric({
+      dimensions: {
+        AutoScalingGroupName: asg.autoScalingGroupName,
+      },
+      metricName: 'GroupInServiceInstances',
+      namespace: 'AWS/AutoScaling',
+      period: Duration.minutes(1),
+      statistic: 'Minimum',
+    });
+    const asgInServiceInstancesAlarm = new cloudwatch.Alarm(this, 'AsgInServiceInstancesAlarm', {
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      evaluationPeriods: 1,
+      metric: asgInServiceInstancesMetric,
+      threshold: 1,
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+    });
+
+    const cwAgentMemUsedPctMetric = new cloudwatch.Metric({
+      dimensions: {
+        AutoScalingGroupName: asg.autoScalingGroupName,
+      },
+      metricName: 'mem_used_percent',
+      namespace: 'CWAgent',
+      period: Duration.minutes(1),
+      statistic: 'Maximum',
+    });
+    const cwAgentSwapUsedPctMetric = new cloudwatch.Metric({
+      dimensions: {
+        AutoScalingGroupName: asg.autoScalingGroupName,
+      },
+      metricName: 'swap_used_percent',
+      namespace: 'CWAgent',
+      period: Duration.minutes(1),
+      statistic: 'Maximum',
+    });
+
+    return {
+      alarms: [],
+      widgets: [
+        [
+          new cloudwatch.TextWidget({
+            height: 1,
+            markdown: '## Validator client infrastructure',
+            width: 6*4,
+          }),
+        ],
+        [
+          new cloudwatch.AlarmWidget({
+            alarm: asgInServiceInstancesAlarm,
+          }),
+          new cloudwatch.GraphWidget({
+            left: [asgCpuUtilizationMetric],
+            right: [asgCpuCreditUsageMetric],
+          }),
+          new cloudwatch.GraphWidget({
+            left: [asgCpuSurplusCreditBalance],
+            right: [asgCpuSurplusCreditsCharged],
+            title: 'CPU credits',
+          }),
+          new cloudwatch.GraphWidget({
+            left: [cwAgentMemUsedPctMetric],
+            right: [cwAgentSwapUsedPctMetric],
+            title: 'Memory usage',
+          }),
+        ],
+      ],
+    }
   }
 
-  private createLoggingAndMetrics(scope: Construct, id: string) {
+  private createClientLoggingAndMetrics(scope: Construct): IObservation {
     // Metric filters
     const logGroup = logs.LogGroup.fromLogGroupName(this, 'ValidatorLogGroupImport',
       'EthStaking-validator-client-lighthouse'); // hardcoded in `amazon-cloudwatch-agent-config.json`
@@ -139,7 +262,7 @@ export class Validator extends Construct {
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
       evaluationPeriods: 1,
       metric: beaconNodesSyncedMetric,
-      threshold: 2,
+      threshold: 1,
       treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     });
 
@@ -192,13 +315,11 @@ export class Validator extends Construct {
     });
 
     return {
-      alarm: new cloudwatch.CompositeAlarm(this, 'CompositeAlarm', {
-        alarmRule: cloudwatch.AlarmRule.anyOf(
-          beaconNodesSyncedAlarm,
-          activeValidatorsAlarm,
-          attestedSlotAlarm,
-        ),
-      }),
+      alarms: [
+        beaconNodesSyncedAlarm,
+        activeValidatorsAlarm,
+        attestedSlotAlarm,
+      ],
       widgets: [
         [
           new cloudwatch.TextWidget({
@@ -217,7 +338,7 @@ export class Validator extends Construct {
           new cloudwatch.AlarmWidget({
             alarm: attestedSlotAlarm,
           }),
-        ]
+        ],
       ]
     };
   }

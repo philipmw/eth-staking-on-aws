@@ -46,6 +46,7 @@ What's yet to be done:
 
 * Execution client infra, if self-hosted option is chosen
 * I've yet to run a consensus client on mainnet, so I don't know how much storage is required for that.
+* Make EC2 instances [cattle, not pets](https://cloudscaling.com/blog/cloud-computing/the-history-of-pets-vs-cattle/).
 
 ## Architecture
 
@@ -88,13 +89,17 @@ At today's $/ETH exchange rate, a spot instance breaks even at 11 hours of outag
 This project sets up AWS alarms, so I'll be notified immediately when an outage happens.
 Hence, with optimism and naivete, today I believe I can keep this downtime low enough that a spot instance saves me money.
 
-**c7g.medium for Consensus (+Validator)**:
-My workload can run on ARM, so my first choice is ARM for better value.
+**c7g.medium for Consensus**:
+The workload can run on ARM, so my first choice is ARM for better value.
 The workload has very stable CPU, so we cannot take advantage of T4's CPU credit feature.
+(Though it may still be cheaper even with a stable load. I haven't really explored T4.)
 I want to use Amazon Linux 2022, which A1 does not currently support.
 I need at least 2 GB RAM but no more than 4 GB, plus good support for EBS and network.
 Hence, remaining contenders are C7G and M6G.
 c7g.medium is both cheaper and has better networking than m6g.medium, hence that's the victor.
+
+**t4g.micro for Validator**:
+*t4g.micro* is $1.83/month compared to $12.93/month for *c7g.medium*, and I do not need good EBS connectivity.
 
 ## Income vs expense of solo staking
 
@@ -183,7 +188,7 @@ Meanwhile, reinstalling consensus+validator is almost no more work than reinstal
 | Component                                     | Cost/month |
 |-----------------------------------------------|------------|
 | EC2 auto-scaling group                        | free       |
-| EC2 c7g.medium spot instance                  | $13.17     |
+| EC2 t4g.micro spot instance                   | $1.83      |
 | EBS volume - 20 GB root                       | $1.60      |
 | EBS volume - 3000 IOPS                        | free       |
 | EBS volume - 125 MB/s throughput              | free       |
@@ -194,13 +199,13 @@ Meanwhile, reinstalling consensus+validator is almost no more work than reinstal
 | data transfer to Consensus Client             | free       |
 | data transfer to the Internet                 | negligible |
 
-**Subtotal: $15.67 per month**
+**Subtotal: $4.33 per month**
 
 ### Total costs
 
 The cheapest configuration is *just* the Validator, with Execution and Consensus clients coming
 from third party services like Chainstack and Infura. With the cheapest configuration, the cost is
-$16/month.
+under $5/month!
 
 The second-cheapest configuration is Consensus + Validator being on the same EC2 instance, with
 the Execution client hosted by a third-party service. This costs $59/month.
@@ -220,15 +225,15 @@ Amount staked (at exchange rate stated above) is $44,800.
 |----------------------------------------------------------------------------------|------------------------------------------------------|---------------------------------------------|----------------|---------------|------------|
 | AWS-hosted Execution client + AWS-hosted Consensus client + AWS-hosted Validator | least dependency on other services; keep both keys   | most expensive and operationally burdensome | $1,908         | 4.26%         | **-0.1%**  |
 | 3p Execution client + AWS-hosted Consensus client + AWS-hosted Validator         | cheaper and less ops load than above; keep both keys | dependency on one free service              | $708           | 1.58%         | **2.6%**   |
-| 3p Execution client + 3p Consensus client + AWS-hosted Validator                 | cheapest and least ops load; keep both keys          | dependency on two free services             | $192           | 0.43%         | **3.8%**   |
+| 3p Execution client + 3p Consensus client + AWS-hosted Validator                 | cheapest and least ops load; keep both keys          | dependency on two free services             | $52            | 0.12%         | **4.1%**   |
 | [Stakely.io / Lido](https://stakely.io/en/ethereum-staking)                      | no ops load                                          | trust in Stakely/Lido                       | 10% of rewards | n/a           | **3.8%**   |
 | [Allnodes](https://www.allnodes.com/eth2/staking)                                | no ops load                                          | trust in Allnodes                           | $60            | 0.13%         | **4.1%**   |
 | [Blox Staking](https://www.bloxstaking.com/)                                     | no ops load                                          | trust in Blox                               | free for now   | 0%            | **4.2%**   |
 
-Thus, we see that hosting on AWS is significantly more expensive than managed staking solutions.
+There is a tradeoff between higher cost to be self-reliant, versus relying on and trusting third parties.
 
 You may prefer self-hosting on AWS to avoid placing your trust in managed staking companies,
-to improve decentralization, or if you want the challenges and learnings from going your own way.
+to improve Ethereum decentralization, or if you want the challenges and learnings from going your own way.
 
 We should also consider self-hosting in your own home, using your own hardware and Internet connection.
 This turns the relatively high operational costs into much more reasonable capital costs,
@@ -237,18 +242,32 @@ This mode of staking is outside the scope of this project.
 
 ## Deploy stack
 
-Smallest configuration is just one EC2 instance for Consensus + Validator:
+Use CDK context parameters to specify the staking architecture.
+The README sections above explain the associated costs and tradeoffs.
+
+| Decision for you to make                                                                                        | Argument to CDK                               |
+|-----------------------------------------------------------------------------------------------------------------|-----------------------------------------------|
+| Do you want to run your own Execution client?                                                                   | `--context IsExecutionSelfHosted=[yes/no]`    |
+| Do you want to run your own Consensus client?                                                                   | `--context IsConsensusSelfHosted=[yes/no]`    |
+| Do you want your Validator instance to be on the same computer as the Consensus client, or on its own computer? | `--context IsValidatorWithConsensus=[yes/no]` |
+
+Make your architectural decisions, then deploy the CDK stack like so:
 
     cdk deploy \
       --context IsExecutionSelfhosted=no \
-      --context IsConsensusSelfhosted=yes \
-      --context IsValidatorWithConsensus=yes
+      --context IsConsensusSelfhosted=no \
+      --context IsValidatorWithConsensus=no
 
-Once you deploy, subscribe yourself to the *AlarmTopic* SNS topic so you get notifications when something goes wrong.
+Once you deploy the stack:
+
+1. Subscribe yourself to the *AlarmTopic* SNS topic so you get notifications when something goes wrong.
+2. Go into _EC2 Auto-Scaling Groups_ and increase the "desired capacity" from 0 to 1 for all groups.
 
 ## EC2 setup for Execution Client
 
-These don't exist yet because the CDK does not yet support an execution client.
+These instructions don't exist because this project does not yet support an execution client.
+I have not bothered to set it up, since it's so expensive and I'm using Chainstack.
+Feel free to submit an improvement to this project.
 
 ## EC2 setup for both Consensus Client and Validator
 
@@ -264,12 +283,12 @@ After reboot:
 
     sudo dnf install git tmux -y
 
-[Create the CloudWatch agent configuration file](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/create-cloudwatch-agent-configuration-file.html)
-at `~/amazon-cloudwatch-agent-config.json`
-and configure it to run as user `ec2-user`.
-(The reason for the same user is that Lighthouse forces `rw-------` permissions on its log files.)
-Configure the CloudWatch agent to ingest both the beacon node and validator files.
-You can use my own agent config file for reference; it is in this repo at `./amazon-cloudwatch-agent-configs/bn-and-vc-same-instance.json`.
+[Add swap](https://aws.amazon.com/premiumsupport/knowledge-center/ec2-memory-swap-file/)
+so we have at least 4 GB total memory,
+else the cheap instance we're using won't have enough RAM to build Lighthouse from source:
+
+    sudo dd if=/dev/zero of=/swapfile bs=1MB count=2kB
+    sudo -- sh -c 'mkswap /swapfile && chmod 600 /swapfile && swapon /swapfile'
 
 [Install the CloudWatch agent](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/download-cloudwatch-agent-commandline.html),
 manually since we're not running Amazon Linux 2 or any OS listed:
@@ -277,19 +296,21 @@ manually since we're not running Amazon Linux 2 or any OS listed:
     curl -O https://s3.us-west-2.amazonaws.com/amazoncloudwatch-agent-us-west-2/amazon_linux/arm64/latest/amazon-cloudwatch-agent.rpm
     sudo rpm -U ./amazon-cloudwatch-agent.rpm
 
+[Create the CloudWatch agent configuration file](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/create-cloudwatch-agent-configuration-file.html)
+at `~/amazon-cloudwatch-agent-config.json`
+and ensure it's running as user `ec2-user`.
+(The reason for the same user is that Lighthouse forces `rw-------` permissions on its log files.)
+Configure the CloudWatch agent to ingest the beacon node logs, validator logs,
+or both, depending on what architecture you're setting up.
+You can use my own agent config files for reference; they are in this repo at `./amazon-cloudwatch-agent-configs`.
+
 [Start the CloudWatch agent:](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/install-CloudWatch-Agent-on-EC2-Instance-fleet.html#start-CloudWatch-Agent-EC2-fleet)
 
     sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:$HOME/amazon-cloudwatch-agent-config.json
 
-And observe its log:
+Observe its log to make sure it started without errors:
 
     tail -f /var/log/amazon/amazon-cloudwatch-agent/amazon-cloudwatch-agent.log
-
-[Add 2 GB of swap](https://aws.amazon.com/premiumsupport/knowledge-center/ec2-memory-swap-file/),
-else the cheap instance we're using won't have enough RAM to build Lighthouse from source:
-
-    sudo dd if=/dev/zero of=/swapfile bs=1MB count=2kB
-    sudo -- sh -c 'mkswap /swapfile && chmod 600 /swapfile && swapon /swapfile'
 
 ### Install Lighthouse
 

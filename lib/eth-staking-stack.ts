@@ -32,12 +32,13 @@ export class EthStakingStack extends Stack {
       });
     }
 
+    let consensusAlarms: cloudwatch.IAlarm[] = [];
     if (isConsensusSelfhosted) {
       const consensusClient = new ConsensusClient(this, 'ConsensusClient', {
         vpc,
       });
       dashboardWidgets = dashboardWidgets.concat(consensusClient.dashboardWidgets);
-      consensusClient.outageAlarm.addAlarmAction(new cw_actions.SnsAction(alarmSnsTopic));
+      consensusAlarms = consensusClient.alarms;
     }
 
     const validatorClient = new Validator(this, 'Validator', {
@@ -51,6 +52,13 @@ export class EthStakingStack extends Stack {
       widgets: dashboardWidgets,
     });
 
+    const outageAlarm = new cloudwatch.CompositeAlarm(this, 'StakingAlarm', {
+      alarmRule: cloudwatch.AlarmRule.anyOf(
+        ...consensusAlarms,
+        ...validatorClient.alarms,
+      ),
+    });
+    outageAlarm.addAlarmAction(new cw_actions.SnsAction(alarmSnsTopic));
   }
 
   private getBooleanContextKey(key: string): boolean {

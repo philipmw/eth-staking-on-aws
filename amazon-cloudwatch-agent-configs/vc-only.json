@@ -9,13 +9,6 @@
 				"collect_list": [
 					{
 						"auto_removal": false,
-						"file_path": "/home/ec2-user/lighthouse-bn-logs/*",
-						"log_group_name": "EthStaking-beacon-node-lighthouse",
-						"log_stream_name": "{instance_id}",
-						"retention_in_days": 90
-					},
-					{
-						"auto_removal": false,
 						"file_path": "/home/ec2-user/lighthouse-vc-logs/*",
 						"log_group_name": "EthStaking-validator-client-lighthouse",
 						"log_stream_name": "{instance_id}",

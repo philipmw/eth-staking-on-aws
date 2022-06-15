@@ -11,7 +11,7 @@ interface ConsensusClientProps {
 }
 
 export class ConsensusClient extends Construct {
-  readonly outageAlarm: cloudwatch.CompositeAlarm;
+  readonly alarms: cloudwatch.IAlarm[];
   readonly dashboardWidgets: cloudwatch.IWidget[][];
 
   constructor(scope: Construct, id: string, { vpc }: ConsensusClientProps) {
@@ -211,7 +211,7 @@ export class ConsensusClient extends Construct {
       },
       metricName: 'CPUUtilization',
       namespace: 'AWS/EC2',
-      period: Duration.minutes(1),
+      period: Duration.minutes(5),
       statistic: 'Average',
     });
     const asgInServiceInstancesMetric = new cloudwatch.Metric({
@@ -229,6 +229,25 @@ export class ConsensusClient extends Construct {
       metric: asgInServiceInstancesMetric,
       threshold: 1,
       treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+    });
+
+    const cwAgentMemUsedPctMetric = new cloudwatch.Metric({
+      dimensions: {
+        AutoScalingGroupName: asg.autoScalingGroupName,
+      },
+      metricName: 'mem_used_percent',
+      namespace: 'CWAgent',
+      period: Duration.minutes(1),
+      statistic: 'Maximum',
+    });
+    const cwAgentSwapUsedPctMetric = new cloudwatch.Metric({
+      dimensions: {
+        AutoScalingGroupName: asg.autoScalingGroupName,
+      },
+      metricName: 'swap_used_percent',
+      namespace: 'CWAgent',
+      period: Duration.minutes(1),
+      statistic: 'Maximum',
     });
 
     const dataVolume = new ec2.Volume(this, 'EbsVolume', {
@@ -261,14 +280,12 @@ export class ConsensusClient extends Construct {
       treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     });
 
-    this.outageAlarm = new cloudwatch.CompositeAlarm(this, 'CompositeAlarm', {
-      alarmRule: cloudwatch.AlarmRule.anyOf(
-        syncedSlotAlarm,
-        asgInServiceInstancesAlarm,
-        asgNetworkOutAlarm,
-        ebsReadOpsAlarm,
-      ),
-    });
+    this.alarms = [
+      syncedSlotAlarm,
+      asgInServiceInstancesAlarm,
+      asgNetworkOutAlarm,
+      ebsReadOpsAlarm,
+    ];
 
     this.dashboardWidgets = [
       [
@@ -320,7 +337,7 @@ export class ConsensusClient extends Construct {
         new cloudwatch.TextWidget({
           height: 1,
           markdown: '## Consensus client infrastructure',
-          width: 6*4,
+          width: 6*3,
         }),
       ],
       [
@@ -330,6 +347,13 @@ export class ConsensusClient extends Construct {
         new cloudwatch.GraphWidget({
           left: [asgCpuUtilizationMetric],
         }),
+        new cloudwatch.GraphWidget({
+          left: [cwAgentMemUsedPctMetric],
+          right: [cwAgentSwapUsedPctMetric],
+          title: 'Memory usage',
+        }),
+      ],
+      [
         new cloudwatch.AlarmWidget({
           alarm: asgNetworkOutAlarm,
         }),
