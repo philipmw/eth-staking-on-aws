@@ -102,10 +102,13 @@ From now til the end of the document, I assume [1 ETH = $1,400](https://coinmark
 we're staking 32 ETH, and the current solo staking [interest rate is 4.1%](https://ethereum.org/en/staking/).
 That's an income of $1,837 per year ($153 per month, $0.21 per hour).
 
-Expense of staking on AWS ranges from $15 to $166 per month, depending on how self-sufficient you want to be.
+This income will be offset by the operational costs of validating, so our goal is to minimize these costs
+to maximize our staking profit.
+
+Expense of staking on AWS ranges from $16 to $167 per month, depending on how self-sufficient you want to be.
 Expenses are detailed in a section below.
 
-Thus, profit of staking on AWS ranges from negative to $138 per month.
+Net interest rate while staking on AWS ranges from negative to 3.8%.
 
 ## Expenses of staking (AWS resources and their costs)
 
@@ -170,7 +173,8 @@ The validator client has no choice but to be self-hosted, as that's the jewel of
 The only choice is whether to self-host it on the same instance as the Consensus,
 or whether to spin up a separate EC2 instance.
 
-For now, I am trying self-hosting it on the same instance as Consensus.
+If you plan to run a Consensus Client, there is little reason to run Validator on a separate instance.
+I prefer to host both clients on the same instance.
 Frugality is the first reason, but the unintuitive second reason is system reliability.
 Since I am using EC2 spot market, having a separate instance increases my risk of having an outage.
 Having just one spot instance makes me a smaller target for EC2 spot's reaper.
@@ -212,19 +216,24 @@ brings the total to $59 + 100 = $159/month, or $1,908/year.
 In the table below, expense ratio is [operational cost] / [amount staked].
 Amount staked (at exchange rate stated above) is $44,800.
 
-| Staking method                                                                      | Pros                                                 | Cons                                        | Cost/year      | Expense ratio | Net reward               |
-|-------------------------------------------------------------------------------------|------------------------------------------------------|---------------------------------------------|----------------|---------------|--------------------------|
-| self-hosted Execution client + self-hosted Consensus client + self-hosted Validator | least dependency on other services; keep both keys   | most expensive and operationally burdensome | $1,908         | 4.26%         | 4.2% - 4.26% = **-0.1%** |
-| 3p Execution client + self-hosted Consensus client + self-hosted Validator          | cheaper and less ops load than above; keep both keys | dependency on one free service              | $708           | 1.58%         | 4.2% - 1.58% = **2.6%**  |
-| 3p Execution client + 3p Consensus client + self-hosted Validator                   | cheapest and least ops load; keep both keys          | dependency on two free services             | $192           | 0.43%         | 4.2% - 0.03% = **3.8%**  |
-| [Stakely.io / Lido](https://stakely.io/en/ethereum-staking)                         | no ops load                                          | trust in Stakely/Lido                       | 10% of rewards | n/a           | 90% of 4.2% = **3.8%**   |
-| [Allnodes](https://www.allnodes.com/eth2/staking)                                   | no ops load                                          | trust in Allnodes                           | $60            | 0.13%         | 4.2 - 0.13% = **4.1%**   |
-| [Blox Staking](https://www.bloxstaking.com/)                                        | no ops load                                          | trust in Blox                               | free for now   | 0%            | **4.2%**                 |
+| Staking method                                                                   | Pros                                                 | Cons                                        | Cost/year      | Expense ratio | Net reward |
+|----------------------------------------------------------------------------------|------------------------------------------------------|---------------------------------------------|----------------|---------------|------------|
+| AWS-hosted Execution client + AWS-hosted Consensus client + AWS-hosted Validator | least dependency on other services; keep both keys   | most expensive and operationally burdensome | $1,908         | 4.26%         | **-0.1%**  |
+| 3p Execution client + AWS-hosted Consensus client + AWS-hosted Validator         | cheaper and less ops load than above; keep both keys | dependency on one free service              | $708           | 1.58%         | **2.6%**   |
+| 3p Execution client + 3p Consensus client + AWS-hosted Validator                 | cheapest and least ops load; keep both keys          | dependency on two free services             | $192           | 0.43%         | **3.8%**   |
+| [Stakely.io / Lido](https://stakely.io/en/ethereum-staking)                      | no ops load                                          | trust in Stakely/Lido                       | 10% of rewards | n/a           | **3.8%**   |
+| [Allnodes](https://www.allnodes.com/eth2/staking)                                | no ops load                                          | trust in Allnodes                           | $60            | 0.13%         | **4.1%**   |
+| [Blox Staking](https://www.bloxstaking.com/)                                     | no ops load                                          | trust in Blox                               | free for now   | 0%            | **4.2%**   |
 
-Thus, we see that self-hosting on AWS is significantly more expensive than managed staking solutions.
+Thus, we see that hosting on AWS is significantly more expensive than managed staking solutions.
 
-You may prefer self-hosting on AWS to avoid placing your trust in managed staking companies
-or if you want the challenges and learnings from going your own way.
+You may prefer self-hosting on AWS to avoid placing your trust in managed staking companies,
+to improve decentralization, or if you want the challenges and learnings from going your own way.
+
+We should also consider self-hosting in your own home, using your own hardware and Internet connection.
+This turns the relatively high operational costs into much more reasonable capital costs,
+though it has its own cons.
+This mode of staking is outside the scope of this project.
 
 ## Deploy stack
 
