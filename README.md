@@ -204,13 +204,13 @@ This project supports running Validator both standalone and sharing an EC2 insta
 | CloudWatch logs (ingestion, 20 MB/month)                        | free                        | $0.05               |
 | CloudWatch logs (storage, 90 days)                              | free                        | $0.01               |
 | CloudWatch custom metrics (3 filters for logs, 6 from CW agent) | free                        | $2.70               |
-| CloudWatch alarms for metrics (3)                               | free                        | $0.30               |
+| CloudWatch alarms for metrics (4)                               | free                        | $0.40               |
 | CloudWatch dashboard for metrics                                | free                        | $3.00               |
 | data transfer to Consensus Client                               | free                        | free                |
 | data transfer to the Internet (40 KByte/min)                    | free                        | $0.16               |
-| **TOTAL**                                                       | **$1.83**                   | **$9.65**           |
+| **TOTAL**                                                       | **$1.83**                   | **$9.75**           |
 
-**Subtotal: between $1.83 and $9.65 per month**, depending on how much other stuff you have in your AWS account.
+**Subtotal: between $1.83 and $9.75 per month**, depending on how much other stuff you have in your AWS account.
 
 ### Total costs
 

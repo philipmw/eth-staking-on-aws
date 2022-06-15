@@ -130,6 +130,23 @@ export class Validator extends Construct {
           Metrics: ['GroupInServiceInstances']
         }]);
 
+    const asgNetworkOutMetric = new cloudwatch.Metric({
+      dimensions: {
+        AutoScalingGroupName: asg.autoScalingGroupName,
+      },
+      metricName: 'NetworkOut',
+      namespace: 'AWS/EC2',
+      period: Duration.minutes(5),
+      statistic: 'Average',
+    });
+    const asgNetworkOutAlarm = new cloudwatch.Alarm(this, 'AsgNetworkOutAlarm', {
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      evaluationPeriods: 1,
+      metric: asgNetworkOutMetric,
+      threshold: 10_000, // 10 KB/minute
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+    });
+
     const asgCpuUtilizationMetric = new cloudwatch.Metric({
       dimensions: {
         AutoScalingGroupName: asg.autoScalingGroupName,
@@ -203,7 +220,10 @@ export class Validator extends Construct {
     });
 
     return {
-      alarms: [],
+      alarms: [
+        asgNetworkOutAlarm,
+        asgInServiceInstancesAlarm,
+      ],
       widgets: [
         [
           new cloudwatch.TextWidget({
@@ -223,12 +243,15 @@ export class Validator extends Construct {
           new cloudwatch.GraphWidget({
             left: [asgCpuSurplusCreditBalance],
             right: [asgCpuSurplusCreditsCharged],
-            title: 'CPU credits',
+            title: 'CPU surplus credits',
           }),
           new cloudwatch.GraphWidget({
             left: [cwAgentMemUsedPctMetric],
             right: [cwAgentSwapUsedPctMetric],
             title: 'Memory usage',
+          }),
+          new cloudwatch.AlarmWidget({
+            alarm: asgNetworkOutAlarm,
           }),
         ],
       ],
