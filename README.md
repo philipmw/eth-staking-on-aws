@@ -23,7 +23,7 @@ the "how" and "how much".
 
 ## Summary of findings
 
-* We can run a Validator on AWS for as low as $2/month, if we rely on free tier of both AWS and Infura (or any other managed Consensus layer provider).
+* We can run a Validator on AWS for as low as $2/month, if we rely on "always free tier" of both AWS and Infura (or any other managed Consensus layer provider).
 * Self-sufficiency is operationally expensive. Running your own execution and consensus clients on AWS costs more than staking rewards.
 
 ## Useful commands
@@ -160,21 +160,21 @@ Data transfer out is about 11 MBytes/minute according to CloudWatch metrics for 
 That's 660 MBytes/hour, or 16 GBytes/day, or about 482 GBytes/month.
 The first 100 GBytes/month is free, followed by remaining 382 GBytes at $0.09/GB, totaling $34.38.
 
-| Component                                                | Always Free Tier cost/per month | Marginal cost/month |
-|----------------------------------------------------------|---------------------------------|---------------------|
-| VPC with no NAT instances                                | free                            | free                |
-| EC2 auto-scaling group                                   | free                            | free                |
-| EC2 c7g.medium spot instance                             | $13.17                          | $13.17              |
-| EBS volume - 20 GB root                                  | free                            | $1.60               |
-| EBS volume - 100 GB storage for Prater                   | free                            | $8.00               |
-| EBS volume - 3000 IOPS                                   | free                            | free                |
-| EBS volume - 125 MB/s throughput                         | free                            | free                |
-| CloudWatch logs, ingestion (100 MB/month)                | free                            | $0.05               |
-| CloudWatch logs, storage (90 days)                       | free                            | $0.01               |
-| CloudWatch metrics (4 filters for logs, 9 from CW Agent) | $0.90                           | $3.90               |
-| CloudWatch alarms (4)                                    | free                            | $0.40               |
-| CloudWatch dashboard                                     | free                            | $3.00               |
-| data transfer to the Internet (13.5 MByte/min)           | $44.25                          | $53.25              |
+| Component                                                | Always Free Tier cost/month | Marginal cost/month |
+|----------------------------------------------------------|-----------------------------|---------------------|
+| VPC with no NAT instances                                | free                        | free                |
+| EC2 auto-scaling group                                   | free                        | free                |
+| EC2 c7g.medium spot instance                             | $13.17                      | $13.17              |
+| EBS volume - 20 GB root                                  | free                        | $1.60               |
+| EBS volume - 100 GB storage for Prater                   | free                        | $8.00               |
+| EBS volume - 3000 IOPS                                   | free                        | free                |
+| EBS volume - 125 MB/s throughput                         | free                        | free                |
+| CloudWatch logs, ingestion (100 MB/month)                | free                        | $0.05               |
+| CloudWatch logs, storage (90 days)                       | free                        | $0.01               |
+| CloudWatch metrics (4 filters for logs, 9 from CW Agent) | $0.90                       | $3.90               |
+| CloudWatch alarms (4)                                    | free                        | $0.40               |
+| CloudWatch dashboard                                     | free                        | $3.00               |
+| data transfer to the Internet (13.5 MByte/min)           | $44.25                      | $53.25              |
 
 **Subtotal: between $58.32 and $83.38 per month**, depending on how much other stuff you have in your AWS account.
 
