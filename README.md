@@ -13,7 +13,7 @@ This project's goals:
 
 As of June 2022, this project is [validating on Prater testnet](https://prater.beaconcha.in/validator/0xa56c644a75834fa276908caae13694f34d9e2481002997e3ef1fc34551088fdb63b9767472165557fe7606a9a86cddc0#attestations)!
 
-![screenshot of Consensus and Validator clients](./clients%20screenshot.png)
+![screenshot of Consensus and Validator clients](./readme-assets/clients%20screenshot.png)
 
 ## Audience
 
@@ -353,3 +353,10 @@ Use the following command-line arguments for logging:
       --logfile-max-size 10 \
 
 Then start Lighthouse validator node!
+
+## Monitoring
+
+If you have your CloudWatch agent set up on EC2 as per instructions above,
+then you should have a working dashboard in CloudWatch.
+
+![screenshot of CloudWatch dashboard](./readme-assets/cloudwatch%20dashboard%20screenshot.png)
