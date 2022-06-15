@@ -99,18 +99,19 @@ Hence, remaining contenders are C7G and M6G.
 c7g.medium is both cheaper and has better networking than m6g.medium, hence that's the victor.
 
 **t4g.micro for Validator**:
-*t4g.micro* is $1.83/month compared to $12.93/month for *c7g.medium*, and I do not need good EBS connectivity.
+*t4g.micro* is $1.83/month compared to $12.93/month for *c7g.medium*, and its performance seems to be satisfactory.
+We may even be able to use *t4g.nano*; the hardest part would be getting Lighthouse set up.
 
 ## Income vs expense of solo staking
 
 From now til the end of the document, I assume [1 ETH = $1,400](https://coinmarketcap.com/currencies/ethereum/),
-we're staking 32 ETH, and the current solo staking [interest rate is 4.1%](https://ethereum.org/en/staking/).
+we're staking 32 ETH, and the current solo staking [interest rate is 4.2%](https://ethereum.org/en/staking/).
 That's an income of $1,837 per year ($153 per month, $0.21 per hour).
 
 This income will be offset by the operational costs of validating, so our goal is to minimize these costs
 to maximize our staking profit.
 
-Expense of staking on AWS ranges from $16 to $167 per month, depending on how self-sufficient you want to be.
+Expense of staking on AWS ranges from $5 to $159 per month, depending on how self-sufficient you want to be.
 Expenses are detailed in a section below.
 
 Net interest rate while staking on AWS ranges from negative to 3.8%.
@@ -210,7 +211,7 @@ under $5/month!
 The second-cheapest configuration is Consensus + Validator being on the same EC2 instance, with
 the Execution client hosted by a third-party service. This costs $59/month.
 Putting the Validator on its own dedicated EC2 instance increases the total cost, and
-I don't see enough benefit to doing this.
+I don't see enough benefit to doing this if you are running a Consensus client anyway.
 
 Finally, the maximal self-hosting option is to also host the the Execution client for an extra $100/month.
 So, self-hosted Execution (its own EC2 instance) plus self-hosted Consensus + Validator (sharing an EC2 instance)
