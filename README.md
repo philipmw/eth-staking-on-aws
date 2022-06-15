@@ -21,6 +21,11 @@ The audience of this repository and doc is folks who have a good grasp of Linux 
 and of Ethereum staking at a high level, and are interested in exploring staking on AWS:
 the "how" and "how much".
 
+## Summary of findings
+
+* We can run a Validator on AWS for as low as $2/month, if we rely on free tier of both AWS and Infura (or any other managed Consensus layer provider).
+* Self-sufficiency is operationally expensive. Running your own execution and consensus clients on AWS costs more than staking rewards.
+
 ## Useful commands
 
 * `npm run build`   compile typescript to js
@@ -111,14 +116,14 @@ That's an income of $1,837 per year ($153 per month, $0.21 per hour).
 This income will be offset by the operational costs of validating, so our goal is to minimize these costs
 to maximize our staking profit.
 
-Expense of staking on AWS ranges from $5 to $159 per month, depending on how self-sufficient you want to be.
+Expense of staking on AWS ranges from single digits to three digits per month,
+depending on how self-sufficient you want to be.
 Expenses are detailed in a section below.
-
-Net interest rate while staking on AWS ranges from negative to 3.8%.
 
 ## Expenses of staking (AWS resources and their costs)
 
 All AWS costs are for _us-west-2_.
+They are also best-effort based on my own experiences and understanding.
 
 ### Execution client
 
@@ -155,22 +160,23 @@ Data transfer out is about 11 MBytes/minute according to CloudWatch metrics for 
 That's 660 MBytes/hour, or 16 GBytes/day, or about 482 GBytes/month.
 The first 100 GBytes/month is free, followed by remaining 382 GBytes at $0.09/GB, totaling $34.38.
 
-| Component                                     | Cost/month |
-|-----------------------------------------------|------------|
-| VPC with no NAT instances                     | free       |
-| EC2 auto-scaling group                        | free       |
-| EC2 c7g.medium spot instance                  | $13.17     |
-| EBS volume - 20 GB root                       | $1.60      |
-| EBS volume - 100 GB storage for Prater        | $8.00      |
-| EBS volume - 3000 IOPS                        | free       |
-| EBS volume - 125 MB/s throughput              | free       |
-| CloudWatch logs for Lighthouse client (<5 GB) | free       |
-| CloudWatch metrics from logs (4)              | $1.20      |
-| CloudWatch alarms for metrics                 | free       |
-| CloudWatch dashboard for metrics              | free       |
-| data transfer to the Internet                 | $34.38     |
+| Component                                                | Always Free Tier cost/per month | Marginal cost/month |
+|----------------------------------------------------------|---------------------------------|---------------------|
+| VPC with no NAT instances                                | free                            | free                |
+| EC2 auto-scaling group                                   | free                            | free                |
+| EC2 c7g.medium spot instance                             | $13.17                          | $13.17              |
+| EBS volume - 20 GB root                                  | free                            | $1.60               |
+| EBS volume - 100 GB storage for Prater                   | free                            | $8.00               |
+| EBS volume - 3000 IOPS                                   | free                            | free                |
+| EBS volume - 125 MB/s throughput                         | free                            | free                |
+| CloudWatch logs, ingestion (100 MB/month)                | free                            | $0.05               |
+| CloudWatch logs, storage (90 days)                       | free                            | $0.01               |
+| CloudWatch metrics (4 filters for logs, 9 from CW Agent) | $0.90                           | $3.90               |
+| CloudWatch alarms (4)                                    | free                            | $0.40               |
+| CloudWatch dashboard                                     | free                            | $3.00               |
+| data transfer to the Internet (13.5 MByte/min)           | $44.25                          | $53.25              |
 
-**Subtotal: $58.36 per month**
+**Subtotal: between $58.32 and $83.38 per month**, depending on how much other stuff you have in your AWS account.
 
 ### Validator client
 
@@ -179,43 +185,45 @@ The validator client has no choice but to be self-hosted, as that's the jewel of
 The only choice is whether to self-host it on the same instance as the Consensus,
 or whether to spin up a separate EC2 instance.
 
-If you plan to run a Consensus Client, there is little reason to run Validator on a separate instance.
-I prefer to host both clients on the same instance.
+If you plan to run a Consensus Client, you may prefer to run Validator on the same instance.
 Frugality is the first reason, but the unintuitive second reason is system reliability.
 Since I am using EC2 spot market, having a separate instance increases my risk of having an outage.
 Having just one spot instance makes me a smaller target for EC2 spot's reaper.
 Meanwhile, reinstalling consensus+validator is almost no more work than reinstalling just consensus.
 
-| Component                                     | Cost/month |
-|-----------------------------------------------|------------|
-| EC2 auto-scaling group                        | free       |
-| EC2 t4g.micro spot instance                   | $1.83      |
-| EBS volume - 20 GB root                       | $1.60      |
-| EBS volume - 3000 IOPS                        | free       |
-| EBS volume - 125 MB/s throughput              | free       |
-| CloudWatch logs for Lighthouse client (<5 GB) | free       |
-| CloudWatch metrics from logs (3)              | $0.90      |
-| CloudWatch alarms for metrics                 | free       |
-| CloudWatch dashboard for metrics              | free       |
-| data transfer to Consensus Client             | free       |
-| data transfer to the Internet                 | negligible |
+This project supports running Validator both standalone and sharing an EC2 instance with Consensus.
 
-**Subtotal: $4.33 per month**
+| Component                                                       | Always Free Tier cost/month | Marginal cost/month |
+|-----------------------------------------------------------------|-----------------------------|---------------------|
+| VPC with no NAT instances                                       | free                        | free                |
+| EC2 auto-scaling group                                          | free                        | free                |
+| EC2 t4g.micro spot instance                                     | $1.83                       | $1.83               |
+| EBS volume - 20 GB root                                         | free                        | $1.60               |
+| EBS volume - 3000 IOPS                                          | free                        | free                |
+| EBS volume - 125 MB/s throughput                                | free                        | free                |
+| CloudWatch logs (ingestion, 20 MB/month)                        | free                        | $0.05               |
+| CloudWatch logs (storage, 90 days)                              | free                        | $0.01               |
+| CloudWatch custom metrics (3 filters for logs, 6 from CW agent) | free                        | $2.70               |
+| CloudWatch alarms for metrics (3)                               | free                        | $0.30               |
+| CloudWatch dashboard for metrics                                | free                        | $3.00               |
+| data transfer to Consensus Client                               | free                        | free                |
+| data transfer to the Internet (40 KByte/min)                    | free                        | $0.16               |
+| **TOTAL**                                                       | **$1.83**                   | **$9.65**           |
+
+**Subtotal: between $1.83 and $9.65 per month**, depending on how much other stuff you have in your AWS account.
 
 ### Total costs
 
-The cheapest configuration is *just* the Validator, with Execution and Consensus clients coming
+The cheapest configuration is running *just* the Validator, with Execution and Consensus clients coming
 from third party services like Chainstack and Infura. With the cheapest configuration, the cost is
-under $5/month!
+single digits per month!
 
 The second-cheapest configuration is Consensus + Validator being on the same EC2 instance, with
-the Execution client hosted by a third-party service. This costs $59/month.
-Putting the Validator on its own dedicated EC2 instance increases the total cost, and
-I don't see enough benefit to doing this if you are running a Consensus client anyway.
+the Execution client hosted by a third-party service. This costs double digits per month.
 
-Finally, the maximal self-hosting option is to also host the the Execution client for an extra $100/month.
-So, self-hosted Execution (its own EC2 instance) plus self-hosted Consensus + Validator (sharing an EC2 instance)
-brings the total to $59 + 100 = $159/month, or $1,908/year.
+Finally, the maximal self-reliant option is to also run your own Execution client for an extra $100/month.
+So, AWS-hosted Execution, AWS-hosted Consensus, and AWS-hosted Validator
+brings the total to ~$100 (execution) + ~$70 (consensus) + ~$10 (validator) = $180/month, or $2,160/year.
 
 ## Comparison of cloud staking to Staking-as-a-Service providers
 
@@ -224,9 +232,9 @@ Amount staked (at exchange rate stated above) is $44,800.
 
 | Staking method                                                                   | Pros                                                 | Cons                                        | Cost/year      | Expense ratio | Net reward |
 |----------------------------------------------------------------------------------|------------------------------------------------------|---------------------------------------------|----------------|---------------|------------|
-| AWS-hosted Execution client + AWS-hosted Consensus client + AWS-hosted Validator | least dependency on other services; keep both keys   | most expensive and operationally burdensome | $1,908         | 4.26%         | **-0.1%**  |
-| 3p Execution client + AWS-hosted Consensus client + AWS-hosted Validator         | cheaper and less ops load than above; keep both keys | dependency on one free service              | $708           | 1.58%         | **2.6%**   |
-| 3p Execution client + 3p Consensus client + AWS-hosted Validator                 | cheapest and least ops load; keep both keys          | dependency on two free services             | $52            | 0.12%         | **4.1%**   |
+| AWS-hosted Execution client + AWS-hosted Consensus client + AWS-hosted Validator | least dependency on other services; keep both keys   | most expensive and operationally burdensome | $2,160         | 4.26%         | **-0.1%**  |
+| 3p Execution client + AWS-hosted Consensus client + AWS-hosted Validator         | cheaper and less ops load than above; keep both keys | dependency on a free service                | $1000          | 1.58%         | **2.6%**   |
+| 3p Execution client + 3p Consensus client + AWS-hosted Validator                 | cheapest and least ops load; keep both keys          | dependency on a free service                | $100           | 0.12%         | **4.1%**   |
 | [Stakely.io / Lido](https://stakely.io/en/ethereum-staking)                      | no ops load                                          | trust in Stakely/Lido                       | 10% of rewards | n/a           | **3.8%**   |
 | [Allnodes](https://www.allnodes.com/eth2/staking)                                | no ops load                                          | trust in Allnodes                           | $60            | 0.13%         | **4.1%**   |
 | [Blox Staking](https://www.bloxstaking.com/)                                     | no ops load                                          | trust in Blox                               | free for now   | 0%            | **4.2%**   |
@@ -381,4 +389,6 @@ Then start Lighthouse validator node!
 If you have your CloudWatch agent set up on EC2 as per instructions above,
 then you should have a working dashboard in CloudWatch.
 
-![screenshot of CloudWatch dashboard](./readme-assets/cloudwatch%20dashboard%20screenshot.png)
+![screenshot of CloudWatch dashboard for Consensus client](./readme-assets/cloudwatch%20dashboard%20consensus.png)
+
+![screenshot of CloudWatch dashboard for Validator](./readme-assets/cloudwatch%20dashboard%20validator.png)
