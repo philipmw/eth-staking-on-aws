@@ -23,7 +23,7 @@ the "how" and "how much".
 
 ## Summary of findings
 
-* We can run a Validator on AWS for as low as $2/month, if we rely on "always free tier" of both AWS and Infura (or any other managed Consensus layer provider).
+* We can run a [lazy validator](https://dankradfeist.de/ethereum/2021/09/30/proofs-of-custody.html) on AWS for as low as $2/month, if we rely on "always free tier" of both AWS and Infura (or any other managed Consensus layer provider). This probably will not be possible once The Merge happens.
 * Self-sufficiency is operationally expensive. Running your own execution and consensus clients on AWS costs more than staking rewards.
 
 ## Useful commands
@@ -40,18 +40,17 @@ the "how" and "how much".
 What works:
 
 * VPC with IPv4 and IPv6
-* Consensus Client instance. *Lighthouse* runs and syncs Prater successfully.
-* Consensus Client is integrated with CloudWatch logs, and logs emit metrics such as which slot was last synced.
+* Execution Client instance with *Erigon* client
+* Consensus Client instance with *Lighthouse* client.
 * Validator instance. It talks to my Consensus client and is [validating on Prater testnet](https://prater.beaconcha.in/validator/0xa56c644a75834fa276908caae13694f34d9e2481002997e3ef1fc34551088fdb63b9767472165557fe7606a9a86cddc0#attestations).
-* Validator instance is integrated with CloudWatch logs, and logs emit metrics such as how many beacon nodes it is synced with.
-* Alarms for Consensus Client and/or Validator outages and anomalies
+* All three clients are integrated with CloudWatch logs, metrics, and alarms
 * Dashboard for relevant metrics and alarms
 
 What's yet to be done:
 
-* Execution client infra, if self-hosted option is chosen
-* I've yet to run a consensus client on mainnet, so I don't know how much storage is required for that.
 * Make EC2 instances [cattle, not pets](https://cloudscaling.com/blog/cloud-computing/the-history-of-pets-vs-cattle/).
+* All listed costs need to be revisited and recomputed now that I separated costs into common and per-client
+  and as I make progress on running an Execution client
 
 ## Architecture
 
@@ -94,19 +93,6 @@ At today's $/ETH exchange rate, a spot instance breaks even at 11 hours of outag
 This project sets up AWS alarms, so I'll be notified immediately when an outage happens.
 Hence, with optimism and naivete, today I believe I can keep this downtime low enough that a spot instance saves me money.
 
-**c7g.medium for Consensus**:
-The workload can run on ARM, so my first choice is ARM for better value.
-The workload has very stable CPU, so we cannot take advantage of T4's CPU credit feature.
-(Though it may still be cheaper even with a stable load. I haven't really explored T4.)
-I want to use Amazon Linux 2022, which A1 does not currently support.
-I need at least 2 GB RAM but no more than 4 GB, plus good support for EBS and network.
-Hence, remaining contenders are C7G and M6G.
-c7g.medium is both cheaper and has better networking than m6g.medium, hence that's the victor.
-
-**t4g.micro for Validator**:
-*t4g.micro* is $1.83/month compared to $12.93/month for *c7g.medium*, and its performance seems to be satisfactory.
-We may even be able to use *t4g.nano*; the hardest part would be getting Lighthouse set up.
-
 ## Income vs expense of solo staking
 
 From now til the end of the document, I assume [1 ETH = $1,400](https://coinmarketcap.com/currencies/ethereum/),
@@ -125,17 +111,47 @@ Expenses are detailed in a section below.
 All AWS costs are for _us-west-2_.
 They are also best-effort based on my own experiences and understanding.
 
+### costs shared between components
+
+| Component                      | Always Free Tier cost/month | Marginal cost/month |
+|--------------------------------|-----------------------------|---------------------|
+| VPC with no NAT instances      | free                        | free                |
+| CloudWatch composite alarm     | $0.50                       | $0.50               |
+| CloudWatch dashboard           | free                        | $3.00               |
+
 ### Execution client
 
-The execution client is optionally self-hosted, though I have not set it up yet, so the stack
-is bare.
-But my guess for its cost is about $100/month.
+This section is a work in progress, as I am still setting up an execution client on AWS for the first time.
 
-I am trying to use [Chainstack](https://chainstack.com) instead.
-
+If you want to be a lazy validator, you can (for now at least) use [Chainstack](https://chainstack.com) instead
+of running your own execution client.
 Chainstack receives about 360 requests per hour from my consensus client.
 That's 267,840 requests per month.
 Free tier includes 3,000,000 requests per month on a shared node, so I am well within the free tier.
+We continue with cost estimates for running _your own_ execution client.
+
+Erigon has a _resident size_ of about 3 GB, and uses, uh, 17 TB virtual memory.
+The *t4g.medium* instance with its 4 GB RAM is handling the memory requirements ok.
+
+I am trying to use the EBS `st1` storage (spinning disk) rather than `gp3` (SSD) because
+the former is significantly cheaper. Let's see if the client can handle the slower I/O.
+
+The pricing below does not include any Always Free Tier, since I assume that the Consensus
+and Validator clients (which are more required than this client) will eat up any free tier.
+
+| Component                                               | Marginal cost/month |
+|---------------------------------------------------------|---------------------|
+| VPC with no NAT instances                               | free                |
+| EC2 auto-scaling group                                  | free                |
+| EC2 t4g.medium spot instance                            | $9.50               |
+| EBS volume - 20 GB root                                 | $1.60               |
+| EBS volume - 125 GB `st1` storage (Prater)              | $5.63               |
+| CloudWatch logs, ingestion (100 MB/month)               | $0.05               |
+| CloudWatch logs, storage (90 days)                      | $0.01               |
+| CloudWatch metrics (1 filter for logs, 9 from CW Agent) | $3.00               |
+| CloudWatch alarms (4)                                   | $0.40               |
+| data transfer in                                        | free                |
+| data transfer out to the Internet (? MByte/min)         | ?                   |
 
 **Subtotal: rough guess is $100/month**
 
@@ -144,6 +160,16 @@ Free tier includes 3,000,000 requests per month on a shared node, so I am well w
 The Lighthouse validator client supports multiple consensus clients, so I have it configured
 with two for redundancy: one, my own; and one, [Infura](https://infura.io).
 Infura receives less than 10 requests per day from my validator.
+After The Merge, [Infura will probably not be an option anymore](https://community.infura.io/t/infura-post-merge-from-a-staker-perspective/3889).
+
+I chose *c7g.medium* as the instance type.
+The workload can run on ARM, so my first choice is ARM for better value.
+The workload has very stable CPU, so we cannot take advantage of T4's CPU credit feature.
+(Though it may still be cheaper even with a stable load. We should try the T4G family.)
+I want to use Amazon Linux 2022, which A1 does not currently support.
+I need at least 2 GB RAM but no more than 4 GB, plus good support for EBS and network.
+Hence, remaining contenders are C7G and M6G.
+c7g.medium is both cheaper and has better networking than m6g.medium, hence that's the victor.
 
 When I run Consensus+Validator on the same EC2 instance, the load average is 0.25.
 RAM-wise, it is tight, but workable. Over three days, this is the worst of many samples I've taken:
@@ -155,10 +181,9 @@ RAM-wise, it is tight, but workable. Over three days, this is the worst of many 
 
 Hence I believe this instance (`c7g.medium`) is at its limits RAM-wise, but bearable.
 
-Data transfer in is free, so we ignore it.
-Data transfer out is about 11 MBytes/minute according to CloudWatch metrics for the EC2 instance.
-That's 660 MBytes/hour, or 16 GBytes/day, or about 482 GBytes/month.
-The first 100 GBytes/month is free, followed by remaining 382 GBytes at $0.09/GB, totaling $34.38.
+I also tried cheaper options than the `gp3` variant of EBS. I tried both `sc1` and `st1`,
+which are significantly cheaper for storage, but they proved too slow in I/O.
+They couldn't keep up with Lighthouse duties, and the Validator couldn't attest.
 
 | Component                                                | Always Free Tier cost/month | Marginal cost/month |
 |----------------------------------------------------------|-----------------------------|---------------------|
@@ -166,15 +191,15 @@ The first 100 GBytes/month is free, followed by remaining 382 GBytes at $0.09/GB
 | EC2 auto-scaling group                                   | free                        | free                |
 | EC2 c7g.medium spot instance                             | $13.17                      | $13.17              |
 | EBS volume - 20 GB root                                  | free                        | $1.60               |
-| EBS volume - 100 GB storage for Prater                   | free                        | $8.00               |
+| EBS volume - 100 GB `gp3` storage (mainnet or Prater)    | free                        | $8.00               |
 | EBS volume - 3000 IOPS                                   | free                        | free                |
 | EBS volume - 125 MB/s throughput                         | free                        | free                |
 | CloudWatch logs, ingestion (100 MB/month)                | free                        | $0.05               |
 | CloudWatch logs, storage (90 days)                       | free                        | $0.01               |
 | CloudWatch metrics (4 filters for logs, 9 from CW Agent) | $0.90                       | $3.90               |
 | CloudWatch alarms (4)                                    | free                        | $0.40               |
-| CloudWatch dashboard                                     | free                        | $3.00               |
-| data transfer to the Internet (13.5 MByte/min)           | $44.25                      | $53.25              |
+| data transfer in                                         | free                        | free                |
+| data transfer out to the Internet (13.5 MByte/min)       | $44.25                      | $53.25              |
 
 **Subtotal: between $58.32 and $83.38 per month**, depending on how much other stuff you have in your AWS account.
 
@@ -191,6 +216,9 @@ Since I am using EC2 spot market, having a separate instance increases my risk o
 Having just one spot instance makes me a smaller target for EC2 spot's reaper.
 Meanwhile, reinstalling consensus+validator is almost no more work than reinstalling just consensus.
 
+If you choose to run the Validator separately, the *t4g.micro* instance has satisfactory performance,
+and costs only $1.83/month on spot.
+
 This project supports running Validator both standalone and sharing an EC2 instance with Consensus.
 
 | Component                                                       | Always Free Tier cost/month | Marginal cost/month |
@@ -206,8 +234,9 @@ This project supports running Validator both standalone and sharing an EC2 insta
 | CloudWatch custom metrics (3 filters for logs, 6 from CW agent) | free                        | $2.70               |
 | CloudWatch alarms for metrics (4)                               | free                        | $0.40               |
 | CloudWatch dashboard for metrics                                | free                        | $3.00               |
-| data transfer to Consensus Client                               | free                        | free                |
-| data transfer to the Internet (40 KByte/min)                    | free                        | $0.16               |
+| data transfer in                                                | free                        | free                |
+| data transfer out to Consensus Client                           | free                        | free                |
+| data transfer out to the Internet (40 KByte/min)                | free                        | $0.16               |
 | **TOTAL**                                                       | **$1.83**                   | **$9.75**           |
 
 **Subtotal: between $1.83 and $9.75 per month**, depending on how much other stuff you have in your AWS account.
@@ -272,15 +301,9 @@ Once you deploy the stack:
 1. Subscribe yourself to the *AlarmTopic* SNS topic so you get notifications when something goes wrong.
 2. Go into _EC2 Auto-Scaling Groups_ and increase the "desired capacity" from 0 to 1 for all groups.
 
-## EC2 setup for Execution Client
+## Common EC2 setup for both Execution client, Consensus client, and Validator
 
-These instructions don't exist because this project does not yet support an execution client.
-I have not bothered to set it up, since it's so expensive and I'm using Chainstack.
-Feel free to submit an improvement to this project.
-
-## EC2 setup for both Consensus Client and Validator
-
-Both consensus client and validator are configured for Amazon Linux 2022 on EC2.
+All clients are configured for Amazon Linux 2022 on EC2.
 
 SSH to the EC2 instance over IPv6.
 
@@ -321,23 +344,45 @@ Observe its log to make sure it started without errors:
 
     tail -f /var/log/amazon/amazon-cloudwatch-agent/amazon-cloudwatch-agent.log
 
-### Install Lighthouse
+## Setup for Execution Client (Erigon)
 
-Install prerequisites:
+[Install Go from the web site.](https://go.dev/doc/install), because
+the version in Fedora repositories (1.16.x) is too old for Erigon.
+Get the `go1.18.3.linux-arm64.tar.gz` binary.
 
-    sudo dnf install git cmake clang -y
+Follow [Erigon setup instructions](https://github.com/ledgerwatch/erigon#getting-started).
 
-[Install Rustup.](https://rustup.rs/)
-Proceed with defaults.
+### attach Erigon data directory
 
-[Install Lighthouse.](https://lighthouse-book.sigmaprime.io/installation-source.html)
+[Attach the EBS volume](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-attaching-volume.html) to this instance:
 
-It takes about 45 minutes to compile it on the EC2 instance.
+    AWS_DEFAULT_REGION=us-west-2 aws ec2 attach-volume \
+        --device sdf \
+        --instance-id {FILL IN} \
+        --volume-id {FILL IN}
 
-This concludes setup instructions generic to both Consensus Client and Validator.
-What follows are instructions specific to each instance.
+and [make it available for use](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-using-volumes.html).
 
-## Setup for Consensus Client
+Mount the Erigon data dir:
+
+        sudo mkdir /mnt/erigon-datadir
+        sudo mount /dev/sdf /mnt/erigon-datadir
+
+Start Erigon:
+
+    ./erigon/build/bin/erigon \
+      --datadir /mnt/erigon-datadir/goerli-datadir \
+      --log.json \
+      --chain goerli \
+      --http.addr 0.0.0.0 \
+      2>&1 | tee -a ~/erigon.log
+
+With `sc1` data drive, the client takes over half an hour to initialize for Prater.
+
+## Setup for Consensus Client (Lighthouse)
+
+Download the latest _aarch64_ (non-portable) binary from https://github.com/sigp/lighthouse/releases
+to the EC2 instance.
 
 ### attach Lighthouse data directory
 
@@ -366,6 +411,9 @@ Use the following command-line arguments for logging:
       --logfile-max-size 10 \
 
 ## Setup for Validator
+
+Download the latest _aarch64_ (non-portable) binary from https://github.com/sigp/lighthouse/releases
+to the EC2 instance.
 
 I choose to not store my validator key on EBS.
 Thus, each time I set up the machine, I upload the key to a fresh EC2 instance.

@@ -25,11 +25,13 @@ export class EthStakingStack extends Stack {
       natGateways: 0, // this saves a lot of money!
     });
 
+    let executionAlarms: cloudwatch.IAlarm[] = [];
     if (isExecutionSelfhosted) {
-      throw new Error("Self-hosted execution is not yet supported by this project.");
       const executionClient = new ExecutionClient(this, 'ExecutionClient', {
         vpc,
       });
+      dashboardWidgets = dashboardWidgets.concat(executionClient.dashboardWidgets);
+      executionAlarms = executionClient.alarms;
     }
 
     let consensusAlarms: cloudwatch.IAlarm[] = [];
@@ -54,6 +56,7 @@ export class EthStakingStack extends Stack {
 
     const outageAlarm = new cloudwatch.CompositeAlarm(this, 'StakingAlarm', {
       alarmRule: cloudwatch.AlarmRule.anyOf(
+        ...executionAlarms,
         ...consensusAlarms,
         ...validatorClient.alarms,
       ),
