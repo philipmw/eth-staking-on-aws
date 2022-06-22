@@ -27,7 +27,12 @@ export class ConsensusClient extends Construct {
     );
     sg.addIngressRule(
       ec2.Peer.anyIpv6(),
-      ec2.Port.allIcmpV6(), // requires https://github.com/aws/aws-cdk/pull/20626
+      new ec2.Port({
+        protocol: ec2.Protocol.ICMPV6,
+        stringRepresentation: 'ICMPv6',
+        fromPort: -1,
+        toPort: -1,
+      }),
       "allow ICMP6"
     );
     sg.addIngressRule(
@@ -343,47 +348,45 @@ export class ConsensusClient extends Construct {
       [
         new cloudwatch.AlarmWidget({
           alarm: asgInServiceInstancesAlarm,
+          leftYAxis: {
+            min: 0,
+          },
         }),
         new cloudwatch.GraphWidget({
           left: [asgCpuUtilizationMetric],
+          leftYAxis: {
+            min: 0,
+            max: 100,
+          },
         }),
         new cloudwatch.GraphWidget({
           left: [cwAgentMemUsedPctMetric],
+          leftYAxis: {
+            min: 0,
+            max: 100,
+          },
           right: [cwAgentSwapUsedPctMetric],
+          rightYAxis: {
+            min: 0,
+            max: 100,
+          },
           title: 'Memory usage',
         }),
       ],
       [
         new cloudwatch.AlarmWidget({
           alarm: asgNetworkOutAlarm,
+          leftYAxis: {
+            min: 0,
+          },
         }),
         new cloudwatch.AlarmWidget({
           alarm: ebsReadOpsAlarm,
+          leftYAxis: {
+            min: 0,
+          },
         }),
       ]
     ];
-
-    /**
-     * On-demand instance.
-     * This is deprecated in favor of spot instance to save money.
-     */
-    // const consensusClientInst = new ec2.Instance(this, "ConsensusClientInst", {
-    //   instanceType: ec2.InstanceType.of(ec2.InstanceClass.M6G, ec2.InstanceSize.MEDIUM),
-    //   keyName: 'home mac',
-    //   machineImage: new ec2.AmazonLinuxImage({
-    //     cpuType: ec2.AmazonLinuxCpuType.ARM_64,
-    //     generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2022,
-    //   }),
-    //   securityGroup: consensusClientSecurityGroup,
-    //   vpc,
-    //   vpcSubnets: {
-    //     subnetType: ec2.SubnetType.PUBLIC,
-    //   },
-    // });
-    // // Add IPv6 address
-    // const consensusClientInstCfn = consensusClientInst.node.defaultChild as ec2.CfnInstance;
-    // consensusClientInstCfn.ipv6AddressCount = 1;
-    //
-    // consensusClientVolume.grantAttachVolume(consensusClientInst.role);
   }
 }

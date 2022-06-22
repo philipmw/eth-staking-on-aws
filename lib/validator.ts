@@ -50,7 +50,12 @@ export class Validator extends Construct {
     );
     sg.addIngressRule(
       ec2.Peer.anyIpv6(),
-      ec2.Port.allIcmpV6(), // requires https://github.com/aws/aws-cdk/pull/20626
+      new ec2.Port({
+        protocol: ec2.Protocol.ICMPV6,
+        stringRepresentation: 'ICMPv6',
+        fromPort: -1,
+        toPort: -1,
+      }),
       "allow ICMP6"
     );
     sg.addIngressRule(
@@ -235,10 +240,20 @@ export class Validator extends Construct {
         [
           new cloudwatch.AlarmWidget({
             alarm: asgInServiceInstancesAlarm,
+            leftYAxis: {
+              min: 0,
+            },
           }),
           new cloudwatch.GraphWidget({
             left: [asgCpuUtilizationMetric],
+            leftYAxis: {
+              min: 0,
+              max: 100,
+            },
             right: [asgCpuCreditUsageMetric],
+            rightYAxis: {
+              min: 0,
+            },
           }),
           new cloudwatch.GraphWidget({
             left: [asgCpuSurplusCreditBalance],
@@ -247,11 +262,22 @@ export class Validator extends Construct {
           }),
           new cloudwatch.GraphWidget({
             left: [cwAgentMemUsedPctMetric],
+            leftYAxis: {
+              min: 0,
+              max: 100,
+            },
             right: [cwAgentSwapUsedPctMetric],
+            rightYAxis: {
+              min: 0,
+              max: 100,
+            },
             title: 'Memory usage',
           }),
           new cloudwatch.AlarmWidget({
             alarm: asgNetworkOutAlarm,
+            leftYAxis: {
+              min: 0,
+            },
           }),
         ],
       ],
@@ -354,12 +380,21 @@ export class Validator extends Construct {
         [
           new cloudwatch.AlarmWidget({
             alarm: beaconNodesSyncedAlarm,
+            leftYAxis: {
+              min: 0,
+            },
           }),
           new cloudwatch.AlarmWidget({
             alarm: activeValidatorsAlarm,
+            leftYAxis: {
+              min: 0,
+            },
           }),
           new cloudwatch.AlarmWidget({
             alarm: attestedSlotAlarm,
+            leftYAxis: {
+              min: 0,
+            },
           }),
         ],
       ]
