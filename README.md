@@ -141,7 +141,6 @@ and Validator clients (which are more required than this client) will eat up any
 
 | Component                                               | Marginal cost/month |
 |---------------------------------------------------------|---------------------|
-| VPC with no NAT instances                               | free                |
 | EC2 auto-scaling group                                  | free                |
 | EC2 t4g.medium spot instance                            | $9.50               |
 | EBS volume - 20 GB root                                 | $1.60               |
@@ -187,7 +186,6 @@ They couldn't keep up with Lighthouse duties, and the Validator couldn't attest.
 
 | Component                                                | Always Free Tier cost/month | Marginal cost/month |
 |----------------------------------------------------------|-----------------------------|---------------------|
-| VPC with no NAT instances                                | free                        | free                |
 | EC2 auto-scaling group                                   | free                        | free                |
 | EC2 c7g.medium spot instance                             | $13.17                      | $13.17              |
 | EBS volume - 20 GB root                                  | free                        | $1.60               |
@@ -220,10 +218,10 @@ If you choose to run the Validator separately, the *t4g.micro* instance has sati
 and costs only $1.83/month on spot.
 
 This project supports running Validator both standalone and sharing an EC2 instance with Consensus.
+The following table is for standalone Validator.
 
 | Component                                                       | Always Free Tier cost/month | Marginal cost/month |
 |-----------------------------------------------------------------|-----------------------------|---------------------|
-| VPC with no NAT instances                                       | free                        | free                |
 | EC2 auto-scaling group                                          | free                        | free                |
 | EC2 t4g.micro spot instance                                     | $1.83                       | $1.83               |
 | EBS volume - 20 GB root                                         | free                        | $1.60               |
@@ -233,13 +231,12 @@ This project supports running Validator both standalone and sharing an EC2 insta
 | CloudWatch logs (storage, 90 days)                              | free                        | $0.01               |
 | CloudWatch custom metrics (3 filters for logs, 6 from CW agent) | free                        | $2.70               |
 | CloudWatch alarms for metrics (4)                               | free                        | $0.40               |
-| CloudWatch dashboard for metrics                                | free                        | $3.00               |
 | data transfer in                                                | free                        | free                |
 | data transfer out to Consensus Client                           | free                        | free                |
-| data transfer out to the Internet (40 KByte/min)                | free                        | $0.16               |
-| **TOTAL**                                                       | **$1.83**                   | **$9.75**           |
+| data transfer out to the Internet (none)                        | free                        | free                |
+| **TOTAL**                                                       | **$1.83**                   | **$6.59**           |
 
-**Subtotal: between $1.83 and $9.75 per month**, depending on how much other stuff you have in your AWS account.
+**Subtotal: between $1.83 and $6.59 per month**, depending on how much other stuff you have in your AWS account.
 
 ### Total costs
 
