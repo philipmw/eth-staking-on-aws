@@ -189,7 +189,7 @@ export class ConsensusClient extends Construct {
         }]);
 
     const asgNetworkOutMetric = new cloudwatch.Metric({
-      dimensions: {
+      dimensionsMap: {
         AutoScalingGroupName: asg.autoScalingGroupName,
       },
       metricName: 'NetworkOut',
@@ -206,7 +206,7 @@ export class ConsensusClient extends Construct {
     });
 
     const asgCpuUtilizationMetric = new cloudwatch.Metric({
-      dimensions: {
+      dimensionsMap: {
         AutoScalingGroupName: asg.autoScalingGroupName,
       },
       metricName: 'CPUUtilization',
@@ -215,7 +215,7 @@ export class ConsensusClient extends Construct {
       statistic: 'Average',
     });
     const asgInServiceInstancesMetric = new cloudwatch.Metric({
-      dimensions: {
+      dimensionsMap: {
         AutoScalingGroupName: asg.autoScalingGroupName,
       },
       metricName: 'GroupInServiceInstances',
@@ -232,7 +232,7 @@ export class ConsensusClient extends Construct {
     });
 
     const cwAgentMemUsedPctMetric = new cloudwatch.Metric({
-      dimensions: {
+      dimensionsMap: {
         AutoScalingGroupName: asg.autoScalingGroupName,
       },
       metricName: 'mem_used_percent',
@@ -241,7 +241,7 @@ export class ConsensusClient extends Construct {
       statistic: 'Maximum',
     });
     const cwAgentSwapUsedPctMetric = new cloudwatch.Metric({
-      dimensions: {
+      dimensionsMap: {
         AutoScalingGroupName: asg.autoScalingGroupName,
       },
       metricName: 'swap_used_percent',
@@ -264,7 +264,7 @@ export class ConsensusClient extends Construct {
     dataVolume.grantAttachVolume(instanceRole);
 
     const ebsReadOpsMetric = new cloudwatch.Metric({
-      dimensions: {
+      dimensionsMap: {
         VolumeId: dataVolume.volumeId,
       },
       metricName: 'VolumeReadOps',

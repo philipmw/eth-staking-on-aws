@@ -131,7 +131,7 @@ export class Validator extends Construct {
         }]);
 
     const asgNetworkOutMetric = new cloudwatch.Metric({
-      dimensions: {
+      dimensionsMap: {
         AutoScalingGroupName: asg.autoScalingGroupName,
       },
       metricName: 'NetworkOut',
@@ -148,7 +148,7 @@ export class Validator extends Construct {
     });
 
     const asgCpuUtilizationMetric = new cloudwatch.Metric({
-      dimensions: {
+      dimensionsMap: {
         AutoScalingGroupName: asg.autoScalingGroupName,
       },
       metricName: 'CPUUtilization',
@@ -157,7 +157,7 @@ export class Validator extends Construct {
       statistic: 'Average',
     });
     const asgCpuCreditUsageMetric = new cloudwatch.Metric({
-      dimensions: {
+      dimensionsMap: {
         AutoScalingGroupName: asg.autoScalingGroupName,
       },
       metricName: 'CPUCreditUsage',
@@ -166,7 +166,7 @@ export class Validator extends Construct {
       statistic: 'Average',
     });
     const asgCpuSurplusCreditBalance = new cloudwatch.Metric({
-      dimensions: {
+      dimensionsMap: {
         AutoScalingGroupName: asg.autoScalingGroupName,
       },
       metricName: 'CPUSurplusCreditBalance',
@@ -175,7 +175,7 @@ export class Validator extends Construct {
       statistic: 'Average',
     });
     const asgCpuSurplusCreditsCharged = new cloudwatch.Metric({
-      dimensions: {
+      dimensionsMap: {
         AutoScalingGroupName: asg.autoScalingGroupName,
       },
       metricName: 'CPUSurplusCreditsCharged',
@@ -184,7 +184,7 @@ export class Validator extends Construct {
       statistic: 'Average',
     });
     const asgInServiceInstancesMetric = new cloudwatch.Metric({
-      dimensions: {
+      dimensionsMap: {
         AutoScalingGroupName: asg.autoScalingGroupName,
       },
       metricName: 'GroupInServiceInstances',
@@ -201,7 +201,7 @@ export class Validator extends Construct {
     });
 
     const cwAgentMemUsedPctMetric = new cloudwatch.Metric({
-      dimensions: {
+      dimensionsMap: {
         AutoScalingGroupName: asg.autoScalingGroupName,
       },
       metricName: 'mem_used_percent',
@@ -210,7 +210,7 @@ export class Validator extends Construct {
       statistic: 'Maximum',
     });
     const cwAgentSwapUsedPctMetric = new cloudwatch.Metric({
-      dimensions: {
+      dimensionsMap: {
         AutoScalingGroupName: asg.autoScalingGroupName,
       },
       metricName: 'swap_used_percent',
