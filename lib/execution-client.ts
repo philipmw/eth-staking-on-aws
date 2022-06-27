@@ -118,26 +118,55 @@ export class ExecutionClient extends Construct {
       treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     });
 
-    const newHeadersMetricName = 'to';
-    const newHeadersMetricFilter = new logs.MetricFilter(this, 'NewHeadersMetricFilter', {
+    const newHeadersFromMetricName = 'from';
+    const newHeadersFromMetricFilter = new logs.MetricFilter(this, 'NewHeadersFromMetricFilter', {
       filterPattern: {
         logPatternString: '{ $.msg = "RPC Daemon notified of new headers" }',
       },
       logGroup: logGroup,
       metricNamespace,
-      metricName: newHeadersMetricName,
+      metricName: newHeadersFromMetricName,
       metricValue: '$.from',
     });
+    const newHeadersFromMetric = new cloudwatch.Metric({
+      metricName: newHeadersFromMetricName,
+      namespace: metricNamespace,
+      period: Duration.minutes(1),
+      statistic: 'Minimum',
+    });
 
-    const txpoolQueuedMetricName = 'queued';
-    const txpoolQueuedMetricFilter = new logs.MetricFilter(this, 'TxpoolQueuedMetricFilter', {
+    const newHeadersToMetricName = 'to';
+    const newHeadersToMetricFilter = new logs.MetricFilter(this, 'NewHeadersToMetricFilter', {
       filterPattern: {
-        logPatternString: '{ $.msg = "[txpool] stat" }',
+        logPatternString: '{ $.msg = "RPC Daemon notified of new headers" }',
       },
       logGroup: logGroup,
       metricNamespace,
-      metricName: txpoolQueuedMetricName,
-      metricValue: '$.queued',
+      metricName: newHeadersToMetricName,
+      metricValue: '$.to',
+    });
+    const newHeadersToMetric = new cloudwatch.Metric({
+      metricName: newHeadersToMetricName,
+      namespace: metricNamespace,
+      period: Duration.minutes(1),
+      statistic: 'Minimum',
+    });
+
+    const newHeadersBatchSizeME = new cloudwatch.MathExpression({
+      expression: 'to - from',
+      label: 'batch size',
+      period: Duration.minutes(1),
+      usingMetrics: {
+        from: newHeadersFromMetric,
+        to: newHeadersToMetric,
+      }
+    });
+    const newHeadersBatchSizeAlarm = new cloudwatch.Alarm(this, 'NewHeadersBatchSizeAlarm', {
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      evaluationPeriods: 2,
+      metric: newHeadersBatchSizeME,
+      threshold: 1,
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     });
 
     const launchTemplate = new ec2.LaunchTemplate(this, 'LaunchTemplate', {
@@ -312,6 +341,7 @@ export class ExecutionClient extends Construct {
       asgInServiceInstancesAlarm,
       ebsReadOpsAlarm,
       goodPeersAlarm,
+      newHeadersBatchSizeAlarm,
     ];
 
     this.dashboardWidgets = [
@@ -331,25 +361,18 @@ export class ExecutionClient extends Construct {
         }),
         new cloudwatch.GraphWidget({
           left: [
-            new cloudwatch.Metric({
-              label: 'to header',
-              metricName: newHeadersMetricName,
-              namespace: metricNamespace,
-              period: Duration.minutes(1),
-              statistic: 'Minimum',
-            }),
+            newHeadersFromMetric,
+            newHeadersToMetric,
           ],
+          title: 'header notification',
         }),
-        new cloudwatch.GraphWidget({
-          left: [
-            new cloudwatch.Metric({
-              metricName: txpoolQueuedMetricName,
-              namespace: metricNamespace,
-              period: Duration.minutes(1),
-              statistic: 'Minimum',
-            }),
-          ],
-        }),
+        new cloudwatch.AlarmWidget({
+          alarm: newHeadersBatchSizeAlarm,
+          leftYAxis: {
+            min: 0,
+          },
+          title: 'new headers batch size',
+        })
       ],
 
       [

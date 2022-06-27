@@ -153,11 +153,11 @@ and Validator clients (which are more required than this client) will eat up any
 | CloudWatch logs, ingestion (100 MB/month)                | $0.05               |
 | CloudWatch logs, storage (90 days)                       | $0.01               |
 | CloudWatch metrics (3 filters for logs, 9 from CW Agent) | $3.60               |
-| CloudWatch alarms (4)                                    | $0.40               |
+| CloudWatch alarms (5)                                    | $0.50               |
 | data transfer in                                         | free                |
 | data transfer out to the Internet (5 MByte/min)          | $19.72              |
 
-**Subtotal: $60/month**
+**Subtotal: $61/month**
 
 ### Consensus client
 
@@ -255,7 +255,7 @@ the Execution client hosted by a third-party service. This costs double digits p
 Finally, the maximal self-reliant option, and perhaps the only option after The Merge,
 is to also run your own Execution client.
 So, AWS-hosted Execution, AWS-hosted Consensus, and AWS-hosted Validator
-brings the total to ~$60 (execution) + ~$80 (consensus) + ~$10 (validator) = $150/month, or $1,800/year.
+brings the total to ~$61 (execution) + ~$80 (consensus) + ~$10 (validator) = $151/month, or $1,812/year.
 
 ## Comparison of cloud staking to Staking-as-a-Service providers
 
@@ -264,7 +264,7 @@ Amount staked (at exchange rate stated above) is $44,800.
 
 | Staking method                                                                   | Pros                                                 | Cons                                                            | Cost/year      | Expense ratio | Net reward |
 |----------------------------------------------------------------------------------|------------------------------------------------------|-----------------------------------------------------------------|----------------|---------------|------------|
-| AWS-hosted Execution client + AWS-hosted Consensus client + AWS-hosted Validator | least dependency on other services; keep both keys   | most expensive and operationally burdensome                     | $1,800         | 4.02%         | **0.1%**   |
+| AWS-hosted Execution client + AWS-hosted Consensus client + AWS-hosted Validator | least dependency on other services; keep both keys   | most expensive and operationally burdensome                     | $1,812         | 4.04%         | **0.1%**   |
 | 3p Execution client + AWS-hosted Consensus client + AWS-hosted Validator         | cheaper and less ops load than above; keep both keys | dependency on a free service; may be impossible after The Merge | $1,080         | 2.41%         | **1.8%**   |
 | 3p Execution client + 3p Consensus client + AWS-hosted Validator                 | cheapest and least ops load; keep both keys          | dependency on a free service; may be impossible after The Merge | $120           | 0.27%         | **3.9%**   |
 | [Stakely.io / Lido](https://stakely.io/en/ethereum-staking)                      | no ops load                                          | trust in Stakely/Lido                                           | 10% of rewards | n/a           | **3.8%**   |
