@@ -13,6 +13,10 @@ This project's goals:
 
 As of June 2022, this project is [validating on Prater testnet](https://prater.beaconcha.in/validator/0xa56c644a75834fa276908caae13694f34d9e2481002997e3ef1fc34551088fdb63b9767472165557fe7606a9a86cddc0#attestations)!
 
+At first I started by running a lazy validator, delegating to Chainstack and Infura as much as possible.
+But as of June 26th 2022, this project is running its own full stack of Execution Client,
+Consensus Client, and Validator.
+
 ![screenshot of Consensus and Validator clients](./readme-assets/clients%20screenshot.png)
 
 ## Audience
@@ -49,8 +53,6 @@ What works:
 What's yet to be done:
 
 * Make EC2 instances [cattle, not pets](https://cloudscaling.com/blog/cloud-computing/the-history-of-pets-vs-cattle/).
-* All listed costs need to be revisited and recomputed now that I separated costs into common and per-client
-  and as I make progress on running an Execution client
 
 ## Architecture
 
@@ -93,6 +95,11 @@ At today's $/ETH exchange rate, a spot instance breaks even at 11 hours of outag
 This project sets up AWS alarms, so I'll be notified immediately when an outage happens.
 Hence, with optimism and naivete, today I believe I can keep this downtime low enough that a spot instance saves me money.
 
+**Auto-scaling groups for all components**:
+Auto-scaling groups are somewhat redundant for single hand-managed instances, but they provide
+metrics keyed by ASG name, so metrics can persist across EC2 instances.
+This is especially important for spot instances.
+
 ## Income vs expense of solo staking
 
 From now til the end of the document, I assume [1 ETH = $1,400](https://coinmarketcap.com/currencies/ethereum/),
@@ -121,38 +128,36 @@ They are also best-effort based on my own experiences and understanding.
 
 ### Execution client
 
-This section is a work in progress, as I am still setting up an execution client on AWS for the first time.
-
-If you want to be a lazy validator, you can (for now at least) use [Chainstack](https://chainstack.com) instead
+If you want to be a [lazy validator](https://dankradfeist.de/ethereum/2021/09/30/proofs-of-custody.html),
+you can (for now at least) use [Chainstack](https://chainstack.com) instead
 of running your own execution client.
 Chainstack receives about 360 requests per hour from my consensus client.
 That's 267,840 requests per month.
 Free tier includes 3,000,000 requests per month on a shared node, so I am well within the free tier.
 We continue with cost estimates for running _your own_ execution client.
 
-Erigon has a _resident size_ of about 3 GB, and uses, uh, 17 TB virtual memory.
-The *t4g.medium* instance with its 4 GB RAM is handling the memory requirements ok.
+Erigon has a _resident size_ of about 15 GB, and uses, uh, 17 TB virtual memory.
+The *t4g.xlarge* instance with its 16 GB RAM is handling the memory requirements ok.
 
-I am trying to use the EBS `st1` storage (spinning disk) rather than `gp3` (SSD) because
-the former is significantly cheaper. Let's see if the client can handle the slower I/O.
+EBS has to be for `gp3` (SSD) storage; `st1` (spinning disk) is too slow to keep up with Erigon.
 
 The pricing below does not include any Always Free Tier, since I assume that the Consensus
 and Validator clients (which are more required than this client) will eat up any free tier.
 
-| Component                                               | Marginal cost/month |
-|---------------------------------------------------------|---------------------|
-| EC2 auto-scaling group                                  | free                |
-| EC2 t4g.medium spot instance                            | $9.50               |
-| EBS volume - 20 GB root                                 | $1.60               |
-| EBS volume - 125 GB `st1` storage (Prater)              | $5.63               |
-| CloudWatch logs, ingestion (100 MB/month)               | $0.05               |
-| CloudWatch logs, storage (90 days)                      | $0.01               |
-| CloudWatch metrics (1 filter for logs, 9 from CW Agent) | $3.00               |
-| CloudWatch alarms (4)                                   | $0.40               |
-| data transfer in                                        | free                |
-| data transfer out to the Internet (? MByte/min)         | ?                   |
+| Component                                                | Marginal cost/month |
+|----------------------------------------------------------|---------------------|
+| EC2 auto-scaling group                                   | free                |
+| EC2 t4g.xlarge spot instance                             | $29.44              |
+| EBS volume - 20 GB root                                  | $1.60               |
+| EBS volume - 200 GB `gp3` storage (Prater)               | $16.00              |
+| CloudWatch logs, ingestion (100 MB/month)                | $0.05               |
+| CloudWatch logs, storage (90 days)                       | $0.01               |
+| CloudWatch metrics (3 filters for logs, 9 from CW Agent) | $3.60               |
+| CloudWatch alarms (4)                                    | $0.40               |
+| data transfer in                                         | free                |
+| data transfer out to the Internet (5 MByte/min)          | $19.72              |
 
-**Subtotal: rough guess is $100/month**
+**Subtotal: $60/month**
 
 ### Consensus client
 
@@ -199,7 +204,7 @@ They couldn't keep up with Lighthouse duties, and the Validator couldn't attest.
 | data transfer in                                         | free                        | free                |
 | data transfer out to the Internet (13.5 MByte/min)       | $44.25                      | $53.25              |
 
-**Subtotal: between $58.32 and $83.38 per month**, depending on how much other stuff you have in your AWS account.
+**Subtotal: between $58.32 and $80.38 per month**, depending on how much other stuff you have in your AWS account.
 
 ### Validator client
 
@@ -247,23 +252,24 @@ single digits per month!
 The second-cheapest configuration is Consensus + Validator being on the same EC2 instance, with
 the Execution client hosted by a third-party service. This costs double digits per month.
 
-Finally, the maximal self-reliant option is to also run your own Execution client for an extra $100/month.
+Finally, the maximal self-reliant option, and perhaps the only option after The Merge,
+is to also run your own Execution client.
 So, AWS-hosted Execution, AWS-hosted Consensus, and AWS-hosted Validator
-brings the total to ~$100 (execution) + ~$70 (consensus) + ~$10 (validator) = $180/month, or $2,160/year.
+brings the total to ~$60 (execution) + ~$80 (consensus) + ~$10 (validator) = $150/month, or $1,800/year.
 
 ## Comparison of cloud staking to Staking-as-a-Service providers
 
 In the table below, expense ratio is [operational cost] / [amount staked].
 Amount staked (at exchange rate stated above) is $44,800.
 
-| Staking method                                                                   | Pros                                                 | Cons                                        | Cost/year      | Expense ratio | Net reward |
-|----------------------------------------------------------------------------------|------------------------------------------------------|---------------------------------------------|----------------|---------------|------------|
-| AWS-hosted Execution client + AWS-hosted Consensus client + AWS-hosted Validator | least dependency on other services; keep both keys   | most expensive and operationally burdensome | $2,160         | 4.26%         | **-0.1%**  |
-| 3p Execution client + AWS-hosted Consensus client + AWS-hosted Validator         | cheaper and less ops load than above; keep both keys | dependency on a free service                | $1000          | 1.58%         | **2.6%**   |
-| 3p Execution client + 3p Consensus client + AWS-hosted Validator                 | cheapest and least ops load; keep both keys          | dependency on a free service                | $100           | 0.12%         | **4.1%**   |
-| [Stakely.io / Lido](https://stakely.io/en/ethereum-staking)                      | no ops load                                          | trust in Stakely/Lido                       | 10% of rewards | n/a           | **3.8%**   |
-| [Allnodes](https://www.allnodes.com/eth2/staking)                                | no ops load                                          | trust in Allnodes                           | $60            | 0.13%         | **4.1%**   |
-| [Blox Staking](https://www.bloxstaking.com/)                                     | no ops load                                          | trust in Blox                               | free for now   | 0%            | **4.2%**   |
+| Staking method                                                                   | Pros                                                 | Cons                                                            | Cost/year      | Expense ratio | Net reward |
+|----------------------------------------------------------------------------------|------------------------------------------------------|-----------------------------------------------------------------|----------------|---------------|------------|
+| AWS-hosted Execution client + AWS-hosted Consensus client + AWS-hosted Validator | least dependency on other services; keep both keys   | most expensive and operationally burdensome                     | $1,800         | 4.02%         | **0.1%**   |
+| 3p Execution client + AWS-hosted Consensus client + AWS-hosted Validator         | cheaper and less ops load than above; keep both keys | dependency on a free service; may be impossible after The Merge | $1,080         | 2.41%         | **1.8%**   |
+| 3p Execution client + 3p Consensus client + AWS-hosted Validator                 | cheapest and least ops load; keep both keys          | dependency on a free service; may be impossible after The Merge | $120           | 0.27%         | **3.9%**   |
+| [Stakely.io / Lido](https://stakely.io/en/ethereum-staking)                      | no ops load                                          | trust in Stakely/Lido                                           | 10% of rewards | n/a           | **3.8%**   |
+| [Allnodes](https://www.allnodes.com/eth2/staking)                                | no ops load                                          | trust in Allnodes                                               | $60            | 0.13%         | **4.1%**   |
+| [Blox Staking](https://www.bloxstaking.com/)                                     | no ops load                                          | trust in Blox                                                   | free for now   | 0%            | **4.2%**   |
 
 There is a tradeoff between higher cost to be self-reliant, versus relying on and trusting third parties.
 
@@ -317,7 +323,7 @@ so we have at least 4 GB total memory,
 else the cheap instance we're using won't have enough RAM to build Lighthouse from source:
 
     sudo dd if=/dev/zero of=/swapfile bs=1MB count=2kB
-    sudo -- sh -c 'mkswap /swapfile && chmod 600 /swapfile && swapon /swapfile'
+    sudo -- sh -c 'chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile'
 
 [Install the CloudWatch agent](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/download-cloudwatch-agent-commandline.html),
 manually since we're not running Amazon Linux 2 or any OS listed:
@@ -343,11 +349,14 @@ Observe its log to make sure it started without errors:
 
 ## Setup for Execution Client (Erigon)
 
+On `t4g.xlarge` with its 16 GB RAM, add 8 GB of swap.
+
 [Install Go from the web site.](https://go.dev/doc/install), because
 the version in Fedora repositories (1.16.x) is too old for Erigon.
 Get the `go1.18.3.linux-arm64.tar.gz` binary.
 
 Follow [Erigon setup instructions](https://github.com/ledgerwatch/erigon#getting-started).
+Copy the binary to the data directory: `/mnt/erigon-datadir/erigon`.
 
 ### attach Erigon data directory
 
@@ -367,14 +376,16 @@ Mount the Erigon data dir:
 
 Start Erigon:
 
-    ./erigon/build/bin/erigon \
+    /mnt/erigon-datadir/erigon \
       --datadir /mnt/erigon-datadir/goerli-datadir \
       --log.json \
       --chain goerli \
-      --http.addr 0.0.0.0 \
+      --http \
+      --ws \
+      --http.api eth,erigon,engine,net \
+      --http.addr 192.168.0.39 \
+      --engine.addr 192.168.0.39 \
       2>&1 | tee -a ~/erigon.log
-
-With `sc1` data drive, the client takes over half an hour to initialize for Prater.
 
 ## Setup for Consensus Client (Lighthouse)
 

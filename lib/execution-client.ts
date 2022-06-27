@@ -51,15 +51,21 @@ export class ExecutionClient extends Construct {
       ec2.Port.udp(30303),
       "erigon eth/66 peering"
     );
+    // The following two are removed to reduce data transfer costs.
+    // sg.addIngressRule(
+    //   ec2.Peer.anyIpv4(),
+    //   ec2.Port.tcp(42069),
+    //   "erigon snap sync"
+    // );
+    // sg.addIngressRule(
+    //   ec2.Peer.anyIpv4(),
+    //   ec2.Port.udp(42069),
+    //   "erigon snap sync"
+    // );
     sg.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(42069),
-      "erigon snap sync"
-    );
-    sg.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.udp(42069),
-      "erigon snap sync"
+      ec2.Peer.ipv4(vpc.vpcCidrBlock), // internal use only
+      ec2.Port.tcp(8545),
+      "erigon private RPC"
     );
 
     const spotOptions: ec2.LaunchTemplateSpotOptions = {
@@ -112,6 +118,27 @@ export class ExecutionClient extends Construct {
       treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     });
 
+    const newHeadersMetricName = 'to';
+    const newHeadersMetricFilter = new logs.MetricFilter(this, 'NewHeadersMetricFilter', {
+      filterPattern: {
+        logPatternString: '{ $.msg = "RPC Daemon notified of new headers" }',
+      },
+      logGroup: logGroup,
+      metricNamespace,
+      metricName: newHeadersMetricName,
+      metricValue: '$.from',
+    });
+
+    const txpoolQueuedMetricName = 'queued';
+    const txpoolQueuedMetricFilter = new logs.MetricFilter(this, 'TxpoolQueuedMetricFilter', {
+      filterPattern: {
+        logPatternString: '{ $.msg = "[txpool] stat" }',
+      },
+      logGroup: logGroup,
+      metricNamespace,
+      metricName: txpoolQueuedMetricName,
+      metricValue: '$.queued',
+    });
 
     const launchTemplate = new ec2.LaunchTemplate(this, 'LaunchTemplate', {
       blockDevices: [
@@ -121,7 +148,7 @@ export class ExecutionClient extends Construct {
         }
       ],
       ebsOptimized: true,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MEDIUM),
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.XLARGE),
       keyName: 'home mac',
       machineImage: new ec2.AmazonLinuxImage({
         cpuType: ec2.AmazonLinuxCpuType.ARM_64,
@@ -257,9 +284,9 @@ export class ExecutionClient extends Construct {
       availabilityZone: vpc.availabilityZones[0],
       encrypted: false,
       removalPolicy: RemovalPolicy.RETAIN,
-      size: Size.gibibytes(125), // minimum for ST1
+      size: Size.gibibytes(200), // for Prater
       volumeName: 'ExecutionClientData',
-      volumeType: ec2.EbsDeviceVolumeType.ST1,
+      volumeType: ec2.EbsDeviceVolumeType.GP3,
     });
 
     dataVolume.grantAttachVolume(instanceRole);
@@ -301,6 +328,27 @@ export class ExecutionClient extends Construct {
           leftYAxis: {
             min: 0,
           },
+        }),
+        new cloudwatch.GraphWidget({
+          left: [
+            new cloudwatch.Metric({
+              label: 'to header',
+              metricName: newHeadersMetricName,
+              namespace: metricNamespace,
+              period: Duration.minutes(1),
+              statistic: 'Minimum',
+            }),
+          ],
+        }),
+        new cloudwatch.GraphWidget({
+          left: [
+            new cloudwatch.Metric({
+              metricName: txpoolQueuedMetricName,
+              namespace: metricNamespace,
+              period: Duration.minutes(1),
+              statistic: 'Minimum',
+            }),
+          ],
         }),
       ],
 
