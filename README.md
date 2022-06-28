@@ -319,10 +319,9 @@ After reboot:
     sudo dnf install git tmux -y
 
 [Add swap](https://aws.amazon.com/premiumsupport/knowledge-center/ec2-memory-swap-file/)
-so we have at least 4 GB total memory,
-else the cheap instance we're using won't have enough RAM to build Lighthouse from source:
+so we have at least 4 GB total memory (24 GB for execution client):
 
-    sudo dd if=/dev/zero of=/swapfile bs=1MB count=2kB
+    sudo dd if=/dev/zero of=/swapfile bs=1MB count=4kB
     sudo -- sh -c 'chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile'
 
 [Install the CloudWatch agent](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/download-cloudwatch-agent-commandline.html),
@@ -349,16 +348,7 @@ Observe its log to make sure it started without errors:
 
 ## Setup for Execution Client (Erigon)
 
-On `t4g.xlarge` with its 16 GB RAM, add 8 GB of swap.
-
-[Install Go from the web site.](https://go.dev/doc/install), because
-the version in Fedora repositories (1.16.x) is too old for Erigon.
-Get the `go1.18.3.linux-arm64.tar.gz` binary.
-
-Follow [Erigon setup instructions](https://github.com/ledgerwatch/erigon#getting-started).
-Copy the binary to the data directory: `/mnt/erigon-datadir/erigon`.
-
-### attach Erigon data directory
+### attach persistent storage
 
 [Attach the EBS volume](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-attaching-volume.html) to this instance:
 
@@ -371,32 +361,48 @@ and [make it available for use](https://docs.aws.amazon.com/AWSEC2/latest/UserGu
 
 Mount the Erigon data dir:
 
-        sudo mkdir /mnt/erigon-datadir
-        sudo mount /dev/sdf /mnt/erigon-datadir
+        sudo mkdir /mnt/execution-persistent-storage
+        sudo mount /dev/sdf /mnt/execution-persistent-storage
+
+### one-time setup
+
+On `t4g.xlarge` with its 16 GB RAM, add 8 GB of swap.
+
+[Install Go from the web site.](https://go.dev/doc/install), because
+the version in Fedora repositories (1.16.x) is too old for Erigon.
+Get the `go1.18.3.linux-arm64.tar.gz` binary.
+
+Follow [Erigon setup instructions](https://github.com/ledgerwatch/erigon#getting-started).
+Copy the binary to the persistent storage: `/mnt/erigon-persistent-storage/erigon`.
+
+### run
 
 Start Erigon:
 
-    /mnt/erigon-datadir/erigon \
-      --datadir /mnt/erigon-datadir/goerli-datadir \
+    /mnt/execution-persistent-storage/erigon \
+      --datadir /mnt/execution-persistent-storage/erigon-goerli-datadir \
       --log.json \
       --chain goerli \
       --http \
       --ws \
       --http.api eth,erigon,engine,net \
-      --http.addr 192.168.0.39 \
-      --engine.addr 192.168.0.39 \
+      --http.addr 0.0.0.0 \
+      --engine.addr 0.0.0.0 \
       --prune htc \
       --prune.r.before=11184524 \
       --maxpeers 10 \
       --torrent.upload.rate 1mb \
       2>&1 | tee -a ~/erigon.log
 
+After letting Erigon initialize, copy the `jwt.hex` file from its datadir to the Consensus Client instance
+so the Consensus client can talk to Erigon's privileged port.
+
 ## Setup for Consensus Client (Lighthouse)
 
 Download the latest _aarch64_ (non-portable) binary from https://github.com/sigp/lighthouse/releases
 to the EC2 instance.
 
-### attach Lighthouse data directory
+### attach persistent storage
 
 [Attach the EBS volume](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-attaching-volume.html) to this instance:
 
@@ -409,8 +415,8 @@ and [make it available for use](https://docs.aws.amazon.com/AWSEC2/latest/UserGu
 
 Mount the Lighthouse data dir:
 
-        sudo mkdir /mnt/lighthouse-datadir
-        sudo mount /dev/sdf /mnt/lighthouse-datadir
+        sudo mkdir /mnt/consensus-persistent-storage
+        sudo mount /dev/sdf /mnt/consensus-persistent-storage
 
 Start Lighthouse beacon node, preferably using [checkpoint sync](https://lighthouse-book.sigmaprime.io/checkpoint-sync.html).
 
