@@ -285,11 +285,32 @@ export class ConsensusClient extends Construct {
       treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     });
 
+    const clientDataDiskUsedPercentMetric = new cloudwatch.Metric({
+      dimensionsMap: {
+        AutoScalingGroupName: asg.autoScalingGroupName,
+        device: 'nvme1n1',
+        fstype: 'ext4',
+        path: '/mnt/consensus-persistent-storage',
+      },
+      metricName: 'disk_used_percent',
+      namespace: 'CWAgent',
+      period: Duration.minutes(5),
+      statistic: 'Minimum',
+    });
+    const clientDataDiskUsedPercentAlarm = new cloudwatch.Alarm(this, 'ClientDataDiskUsedPercentAlarm', {
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      evaluationPeriods: 1,
+      metric: clientDataDiskUsedPercentMetric,
+      threshold: 95,
+      treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+    });
+
     this.alarms = [
       syncedSlotAlarm,
       asgInServiceInstancesAlarm,
       asgNetworkOutAlarm,
       ebsReadOpsAlarm,
+      clientDataDiskUsedPercentAlarm,
     ];
 
     this.dashboardWidgets = [
@@ -374,6 +395,13 @@ export class ConsensusClient extends Construct {
         }),
       ],
       [
+        new cloudwatch.AlarmWidget({
+          alarm: clientDataDiskUsedPercentAlarm,
+          leftYAxis: {
+            min: 0,
+            max: 100,
+          },
+        }),
         new cloudwatch.AlarmWidget({
           alarm: asgNetworkOutAlarm,
           leftYAxis: {
