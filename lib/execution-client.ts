@@ -66,6 +66,11 @@ export class ExecutionClient extends Construct {
       ec2.Port.tcp(8545),
       "erigon private RPC"
     );
+    sg.addIngressRule(
+      ec2.Peer.ipv4(vpc.vpcCidrBlock), // internal use only
+      ec2.Port.tcp(8551),
+      "erigon private RPC"
+    );
 
     const spotOptions: ec2.LaunchTemplateSpotOptions = {
       requestType: ec2.SpotRequestType.ONE_TIME, // needed by ASG
