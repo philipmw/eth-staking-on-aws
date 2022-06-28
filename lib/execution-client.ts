@@ -51,17 +51,16 @@ export class ExecutionClient extends Construct {
       ec2.Port.udp(30303),
       "erigon eth/66 peering"
     );
-    // The following two are removed to reduce data transfer costs.
-    // sg.addIngressRule(
-    //   ec2.Peer.anyIpv4(),
-    //   ec2.Port.tcp(42069),
-    //   "erigon snap sync"
-    // );
-    // sg.addIngressRule(
-    //   ec2.Peer.anyIpv4(),
-    //   ec2.Port.udp(42069),
-    //   "erigon snap sync"
-    // );
+    sg.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(42069),
+      "erigon snap sync"
+    );
+    sg.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.udp(42069),
+      "erigon snap sync"
+    );
     sg.addIngressRule(
       ec2.Peer.ipv4(vpc.vpcCidrBlock), // internal use only
       ec2.Port.tcp(8545),
@@ -114,7 +113,7 @@ export class ExecutionClient extends Construct {
         period: Duration.minutes(5),
         statistic: 'Average',
       }),
-      threshold: 10,
+      threshold: 5,
       treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     });
 

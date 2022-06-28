@@ -385,6 +385,10 @@ Start Erigon:
       --http.api eth,erigon,engine,net \
       --http.addr 192.168.0.39 \
       --engine.addr 192.168.0.39 \
+      --prune htc \
+      --prune.r.before=11184524 \
+      --maxpeers 10 \
+      --torrent.upload.rate 1mb \
       2>&1 | tee -a ~/erigon.log
 
 ## Setup for Consensus Client (Lighthouse)
